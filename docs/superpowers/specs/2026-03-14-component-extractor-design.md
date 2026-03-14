@@ -57,7 +57,8 @@ component-extractor/
 │   ├── interaction_player.py
 │   ├── asset_downloader.py
 │   ├── animation_recorder.py
-│   └── library_detector.py
+│   ├── library_detector.py
+│   └── responsive_collector.py
 │
 ├── normalizer/
 │   ├── __init__.py
@@ -80,7 +81,12 @@ component-extractor/
 │   └── synthesis.py
 │
 └── output/
-    └── assets/
+    ├── assets/
+    │   ├── images/
+    │   ├── fonts/
+    │   └── svgs/
+    ├── animations/
+    └── extractions/
 ```
 
 ---
@@ -91,7 +97,24 @@ component-extractor/
 
 Responsável pela extração de dados do browser.
 
-#### `browser.py`
+#### `browser.py` - Classe `BrowserManager`
+```python
+class BrowserManager:
+    def __init__(self, headless: bool = True):
+        self.playwright = None
+        self.browser = None
+        self.page = None
+        self.headless = headless
+
+    def navigate(self, url: str, timeout: int = 30000) -> None:
+        """Navega para URL e aguarda carregamento."""
+
+    def resize_viewport(self, width: int, height: int) -> None:
+        """Redimensiona viewport."""
+
+    def close(self) -> None:
+        """Fecha browser e libera recursos."""
+```
 - Inicializa Chromium com Playwright
 - Gerencia navegação e ciclo de vida
 - Controla redimensionamento de viewport
@@ -130,9 +153,15 @@ Executa interações e captura mudanças:
 - Registra diferenças de estado
 
 #### `animation_recorder.py`
+Armazena gravações em `output/animations/`:
+- `output/animations/{timestamp}/video.webm` - Gravação de tela
+- `output/animations/{timestamp}/frames/` - Frames extraídos
+- `output/animations/{timestamp}/key_frames/` - Frames importantes
+
+Funcionalidades:
 - Gravação de tela do componente
 - Extração de frames com OpenCV
-- Detecção de frames-chave
+- Detecção de frames-chave (mudança visual significativa)
 - Medição de timing real
 
 #### `asset_downloader.py`
@@ -147,6 +176,27 @@ Detecta bibliotecas externas:
 - Scaneia `<script src>` e globais
 - Extrai código de inicialização
 - Captura snippets de uso
+
+#### `responsive_collector.py`
+Detecta e captura variantes responsivas:
+```python
+class ResponsiveCollector:
+    def __init__(self, page: Page):
+        self.page = page
+
+    def detect_breakpoints(self) -> list[int]:
+        """Extrai widths de media queries do CSS via CSSOM."""
+
+    def collect_at_viewport(self, target: Locator, width: int, height: int) -> dict:
+        """Captura estado do componente em viewport específica."""
+
+    def collect_all(self, target: Locator) -> ResponsiveBehavior:
+        """Detecta breakpoints e coleta estados em cada um."""
+```
+- Acessa `document.styleSheets` para encontrar media queries
+- Extrai valores de `min-width` e `max-width`
+- Redimensiona viewport para cada breakpoint detectado
+- Captura diff de estilos entre breakpoints
 
 ---
 
@@ -320,7 +370,7 @@ class Asset(BaseModel):
     original_url: str
     local_path: str
     file_size_bytes: int
-    dimensions: Optional[tuple[int, int]]
+    dimensions: Optional[list[int]]  # [width, height]
 
 class ExternalLibrary(BaseModel):
     name: str
@@ -401,10 +451,11 @@ class NormalizedOutput(BaseModel):
     assets: list[Asset]
     interactions: InteractionSummary
     animations: AnimationSummary
-    scroll_effects: list[str]
     responsive_behavior: ResponsiveBehavior
     external_libraries: list[ExternalLibrary]
-    observed_states: dict[str, dict]
+
+# Nota: scroll_effects está dentro de AnimationSummary
+# Nota: observed_states está dentro de InteractionSummary
 ```
 
 #### `synthesis.py`
@@ -457,11 +508,19 @@ class ExtractionOrchestrator:
         self.synthesizer = OpenAISynthesizer(api_key)
 
     def extract(self, url: str, strategy: str, query: str,
-                progress_callback=None) -> SynthesisOutput:
+                progress_callback=None, cancel_check=None) -> SynthesisOutput:
 
-        # 1-9: Collector
+        cancel_check = cancel_check or (lambda: False)
+
+        # 1: Navegar
+        if cancel_check(): raise ExtractionError("Cancelado")
         self.browser.navigate(url)
+
+        # 2: Encontrar alvo
+        if cancel_check(): raise ExtractionError("Cancelado")
         target = TargetFinder(self.browser.page).find(strategy, query)
+
+        # 3-9: Collector
         dom_data = DOMExtractor(self.browser.page).extract(target)
         style_data = StyleExtractor(self.browser.page).extract(target)
         interactions = InteractionMapper(self.browser.page).map(target)
@@ -469,12 +528,13 @@ class ExtractionOrchestrator:
         animation_data = AnimationRecorder(self.browser.page, self.output_dir).record(target)
         assets = AssetDownloader(self.browser.page, self.output_dir).download_all(target)
         libraries = LibraryDetector(self.browser.page).detect()
-        responsive_data = self._collect_responsive_data(target)
+        responsive_data = ResponsiveCollector(self.browser.page).collect_all(target)
 
         # 10: Normalizer
         normalized = ContextBuilder().build({...})
 
         # 11: Synthesizer
+        if cancel_check(): raise ExtractionError("Cancelado")
         synthesis = self.synthesizer.synthesize(normalized)
 
         self.browser.close()
@@ -509,6 +569,173 @@ class ExtractionOrchestrator:
 │              │      │  timestamp   │      │  (copiado)   │
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
+
+---
+
+## Tratamento de Erros
+
+### Estratégia de Erros
+
+```python
+class ExtractionError(Exception):
+    """Erro base para extração."""
+    pass
+
+class NavigationError(ExtractionError):
+    """Falha ao navegar para URL."""
+    pass
+
+class TargetNotFoundError(ExtractionError):
+    """Seletor não encontrou elemento."""
+    pass
+
+class APIError(ExtractionError):
+    """Falha na API OpenAI."""
+    pass
+
+class BrowserCrashError(ExtractionError):
+    """Browser travou ou fechou inesperadamente."""
+    pass
+```
+
+### Cenários Tratados
+
+| Cenário | Ação |
+|---------|------|
+| URL inválida/network failure | Retry 3x com backoff, depois `NavigationError` |
+| Seletor não encontra elemento | `TargetNotFoundError` com sugestões de seletores similares |
+| API rate limit | Retry com backoff exponencial |
+| API failure | `APIError` com opção de retry manual |
+| Browser crash | Tentar reiniciar browser, se falhar `BrowserCrashError` |
+| Timeout de operação | Configurável, default 30s, depois cancela |
+| Asset download failure | Log warning, continua sem o asset |
+
+---
+
+## Modelo de Threading
+
+Tkinter não é thread-safe. O pipeline roda em thread separada:
+
+```python
+import threading
+import queue
+
+class ExtractionWorker(threading.Thread):
+    def __init__(self, orchestrator, url, strategy, query, callback_queue):
+        super().__init__()
+        self.orchestrator = orchestrator
+        self.url = url
+        self.strategy = strategy
+        self.query = query
+        self.callback_queue = callback_queue
+        self._cancel_event = threading.Event()
+
+    def run(self):
+        try:
+            result = self.orchestrator.extract(
+                self.url, self.strategy, self.query,
+                progress_callback=lambda step, msg: self.callback_queue.put(
+                    ("progress", step, msg)
+                ),
+                cancel_check=self._cancel_event.is_set
+            )
+            self.callback_queue.put(("success", result))
+        except ExtractionError as e:
+            self.callback_queue.put(("error", str(e)))
+
+    def cancel(self):
+        self._cancel_event.set()
+```
+
+### GUI - Poll de Callbacks
+
+```python
+class ComponentExtractorApp:
+    def __init__(self):
+        self.callback_queue = queue.Queue()
+        self.root.after(100, self._process_queue)
+
+    def _process_queue(self):
+        try:
+            msg = self.callback_queue.get_nowait()
+            self._handle_callback(msg)
+        except queue.Empty:
+            pass
+        self.root.after(100, self._process_queue)
+
+    def _handle_callback(self, msg):
+        msg_type = msg[0]
+        if msg_type == "progress":
+            _, step, text = msg
+            self.progress_display.set_step(step, text)
+        elif msg_type == "success":
+            _, result = msg
+            self.result_panel.display(result)
+        elif msg_type == "error":
+            _, error = msg
+            messagebox.showerror("Erro", error)
+```
+
+---
+
+## Suporte a Cancelamento
+
+### Orchestrator com Cancelamento
+
+```python
+class ExtractionOrchestrator:
+    def extract(self, url: str, strategy: str, query: str,
+                progress_callback=None, cancel_check=None) -> SynthesisOutput:
+
+        cancel_check = cancel_check or (lambda: False)
+
+        # Check entre cada etapa
+        if cancel_check():
+            raise ExtractionError("Cancelado pelo usuário")
+
+        self.browser.navigate(url)
+
+        if cancel_check():
+            raise ExtractionError("Cancelado pelo usuário")
+
+        target = TargetFinder(self.browser.page).find(strategy, query)
+        # ... continua com checks entre cada etapa
+```
+
+### GUI - Botão Cancelar
+
+```python
+def _on_extract(self):
+    self.worker = ExtractionWorker(...)
+    self.worker.start()
+    self.extract_btn.config(text="Cancelar", command=self._on_cancel)
+    self.cancel_btn.pack()
+
+def _on_cancel(self):
+    self.worker.cancel()
+    self.status_label.config(text="Cancelando...")
+```
+
+---
+
+## Notas sobre Pydantic v2
+
+### Forward References
+
+Modelos recursivos (`DOMTree`, `ComponentTree`) requerem `model_rebuild()`:
+
+```python
+from pydantic import BaseModel
+
+class DOMTree(BaseModel):
+    tag: str
+    children: list["DOMTree"]
+
+# Resolver forward reference
+DOMTree.model_rebuild()
+```
+
+Isso deve ser feito em `models/__init__.py` após imports.
 
 ---
 
