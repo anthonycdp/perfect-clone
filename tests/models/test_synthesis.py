@@ -230,7 +230,7 @@ class TestSynthesisOutput:
         output = SynthesisOutput(
             description=description,
             component_tree=tree,
-            interaction_behaviors=[behavior],
+            interactions=[behavior],
             responsive_rules=[rule],
             dependencies=[dependency],
             recreation_prompt="Create a hero section with...",
@@ -238,8 +238,8 @@ class TestSynthesisOutput:
 
         assert output.description.technical == "A hero section with parallax effect"
         assert output.component_tree.name == "HeroSection"
-        assert len(output.interaction_behaviors) == 1
-        assert output.interaction_behaviors[0].trigger == "scroll"
+        assert len(output.interactions) == 1
+        assert output.interactions[0].trigger == "scroll"
         assert len(output.responsive_rules) == 1
         assert output.responsive_rules[0].breakpoint == "768px"
         assert len(output.dependencies) == 1
@@ -258,13 +258,13 @@ class TestSynthesisOutput:
         output = SynthesisOutput(
             description=description,
             component_tree=tree,
-            interaction_behaviors=[],
+            interactions=[],
             responsive_rules=[],
             dependencies=[],
             recreation_prompt="Create a simple blue button",
         )
 
-        assert output.interaction_behaviors == []
+        assert output.interactions == []
         assert output.responsive_rules == []
         assert output.dependencies == []
 
@@ -285,7 +285,7 @@ class TestSynthesisOutput:
             SynthesisOutput(
                 description=description,
                 component_tree=tree,
-                interaction_behaviors=[],
+                interactions=[],
                 responsive_rules=[],
                 dependencies=[],
             )
@@ -302,7 +302,7 @@ class TestSynthesisOutput:
         output = SynthesisOutput(
             description=description,
             component_tree=tree,
-            interaction_behaviors=[],
+            interactions=[],
             responsive_rules=[],
             dependencies=[],
             recreation_prompt="This is required",

@@ -7,7 +7,10 @@ from pydantic import BaseModel
 from models.extraction import (
     AnimationData,
     AnimationRecording,
+    Asset,
     BoundingBox,
+    ExternalLibrary,
+    InteractionState,
     ResponsiveBreakpoint,
     SelectorStrategy,
     TransitionData,
@@ -78,7 +81,7 @@ class InteractionSummary(BaseModel):
     clickable_elements: list[str]
     focusable_elements: list[str]
     scroll_containers: list[str]
-    observed_states: list[str]
+    observed_states: dict[str, InteractionState]
 
 
 class ResponsiveBehavior(BaseModel):
@@ -87,7 +90,7 @@ class ResponsiveBehavior(BaseModel):
     breakpoints: list[ResponsiveBreakpoint]
     is_fluid: bool
     has_mobile_menu: bool
-    grid_changes: list[str]
+    grid_changes: list[dict[str, Any]]
 
 
 class NormalizedOutput(BaseModel):
@@ -96,10 +99,12 @@ class NormalizedOutput(BaseModel):
     Combines all normalized models into a single output structure.
     """
 
-    page_info: PageInfo
-    target_info: TargetInfo
-    dom_tree: DOMTree
-    style_summary: StyleSummary
-    animation_summary: AnimationSummary
-    interaction_summary: InteractionSummary
+    page: PageInfo
+    target: TargetInfo
+    dom: DOMTree
+    styles: StyleSummary
+    animations: AnimationSummary
+    interactions: InteractionSummary
     responsive_behavior: ResponsiveBehavior
+    assets: list[Asset]
+    external_libraries: list[ExternalLibrary]

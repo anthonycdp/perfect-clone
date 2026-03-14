@@ -61,7 +61,7 @@ class SynthesisOutput(BaseModel):
 
     description: ComponentDescription
     component_tree: ComponentTree
-    interaction_behaviors: list[InteractionBehavior]
+    interactions: list[InteractionBehavior]
     responsive_rules: list[ResponsiveRule]
     dependencies: list[Dependency]
     recreation_prompt: str

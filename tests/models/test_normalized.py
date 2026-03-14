@@ -13,7 +13,15 @@ from models.normalized import (
     ResponsiveBehavior,
     NormalizedOutput,
 )
-from models.extraction import SelectorStrategy, BoundingBox
+from models.extraction import (
+    SelectorStrategy,
+    BoundingBox,
+    InteractionType,
+    InteractionState,
+    Asset,
+    AssetType,
+    ExternalLibrary,
+)
 
 
 class TestPageInfo:
@@ -271,27 +279,34 @@ class TestInteractionSummary:
 
     def test_interaction_summary_with_all_fields(self):
         """InteractionSummary should accept all fields."""
+        interaction_state = InteractionState(
+            type=InteractionType.HOVER,
+            selector=".button",
+            before={"opacity": "1"},
+            after={"opacity": "0.8"},
+            duration_ms=150.0,
+        )
         interaction_summary = InteractionSummary(
             hoverable_elements=[".button", ".card"],
             clickable_elements=["a", "button"],
             focusable_elements=["input", "textarea"],
             scroll_containers=[".scrollable"],
-            observed_states=["hover", "focus"],
+            observed_states={"hover": interaction_state},
         )
         assert interaction_summary.hoverable_elements == [".button", ".card"]
         assert interaction_summary.clickable_elements == ["a", "button"]
         assert interaction_summary.focusable_elements == ["input", "textarea"]
         assert interaction_summary.scroll_containers == [".scrollable"]
-        assert interaction_summary.observed_states == ["hover", "focus"]
+        assert interaction_summary.observed_states == {"hover": interaction_state}
 
     def test_interaction_summary_with_empty_lists(self):
-        """InteractionSummary should work with empty lists."""
+        """InteractionSummary should work with empty lists and empty dict."""
         interaction_summary = InteractionSummary(
             hoverable_elements=[],
             clickable_elements=[],
             focusable_elements=[],
             scroll_containers=[],
-            observed_states=[],
+            observed_states={},
         )
         assert interaction_summary.hoverable_elements == []
 
@@ -319,12 +334,12 @@ class TestResponsiveBehavior:
             breakpoints=[breakpoint],
             is_fluid=True,
             has_mobile_menu=True,
-            grid_changes=["1-column to 2-column"],
+            grid_changes=[{"from": "1-column", "to": "2-column"}],
         )
         assert len(responsive_behavior.breakpoints) == 1
         assert responsive_behavior.is_fluid is True
         assert responsive_behavior.has_mobile_menu is True
-        assert responsive_behavior.grid_changes == ["1-column to 2-column"]
+        assert responsive_behavior.grid_changes == [{"from": "1-column", "to": "2-column"}]
 
     def test_responsive_behavior_desktop_only(self):
         """ResponsiveBehavior should work for desktop-only sites."""
@@ -390,7 +405,7 @@ class TestNormalizedOutput:
             clickable_elements=[],
             focusable_elements=[],
             scroll_containers=[],
-            observed_states=[],
+            observed_states={},
         )
         responsive_behavior = ResponsiveBehavior(
             breakpoints=[],
@@ -398,24 +413,44 @@ class TestNormalizedOutput:
             has_mobile_menu=False,
             grid_changes=[],
         )
-
-        output = NormalizedOutput(
-            page_info=page_info,
-            target_info=target_info,
-            dom_tree=dom_tree,
-            style_summary=style_summary,
-            animation_summary=animation_summary,
-            interaction_summary=interaction_summary,
-            responsive_behavior=responsive_behavior,
+        asset = Asset(
+            type=AssetType.IMAGE,
+            original_url="https://example.com/image.png",
+            local_path="/assets/image.png",
+            file_size_bytes=12345,
+            dimensions=[100, 100],
+        )
+        external_library = ExternalLibrary(
+            name="jQuery",
+            version="3.6.0",
+            source_url="https://cdn.example.com/jquery.js",
+            usage_snippets=["$('.test')"],
+            init_code=None,
         )
 
-        assert output.page_info.url == "https://example.com"
-        assert output.target_info.selector_used == ".test"
-        assert output.dom_tree.tag == "div"
-        assert output.style_summary.layout == {}
-        assert output.animation_summary.css_animations == []
-        assert output.interaction_summary.hoverable_elements == []
+        output = NormalizedOutput(
+            page=page_info,
+            target=target_info,
+            dom=dom_tree,
+            styles=style_summary,
+            animations=animation_summary,
+            interactions=interaction_summary,
+            responsive_behavior=responsive_behavior,
+            assets=[asset],
+            external_libraries=[external_library],
+        )
+
+        assert output.page.url == "https://example.com"
+        assert output.target.selector_used == ".test"
+        assert output.dom.tag == "div"
+        assert output.styles.layout == {}
+        assert output.animations.css_animations == []
+        assert output.interactions.hoverable_elements == []
         assert output.responsive_behavior.is_fluid is True
+        assert len(output.assets) == 1
+        assert output.assets[0].type == AssetType.IMAGE
+        assert len(output.external_libraries) == 1
+        assert output.external_libraries[0].name == "jQuery"
 
     def test_normalized_output_requires_all_fields(self):
         """NormalizedOutput should require all component models."""
