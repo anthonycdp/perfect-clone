@@ -1,7 +1,7 @@
 """Pydantic models for raw extraction data."""
 
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -52,7 +52,7 @@ class AnimationData(BaseModel):
     iteration_count: str
     direction: str
     fill_mode: str
-    keyframes: Optional[dict] = None
+    keyframes: Optional[dict[str, Any]] = None
 
 
 class TransitionData(BaseModel):
@@ -69,8 +69,8 @@ class InteractionState(BaseModel):
 
     type: InteractionType
     selector: str
-    before: dict
-    after: dict
+    before: dict[str, Any]
+    after: dict[str, Any]
     duration_ms: float
 
 
@@ -100,7 +100,7 @@ class ResponsiveBreakpoint(BaseModel):
     width: int
     height: int
     source: str  # "media_query" or "user_defined"
-    styles_diff: dict
+    styles_diff: dict[str, Any]
     layout_changes: list[str]
 
 

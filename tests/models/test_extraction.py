@@ -1,6 +1,8 @@
 """Tests for extraction data models."""
 
 import pytest
+from pydantic import ValidationError
+
 from models.extraction import (
     SelectorStrategy,
     InteractionType,
@@ -109,7 +111,7 @@ class TestBoundingBox:
 
     def test_bounding_box_requires_all_fields(self):
         """BoundingBox should require all fields."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             BoundingBox(x=10, y=20)
 
 
@@ -153,7 +155,7 @@ class TestAnimationData:
 
     def test_animation_data_requires_required_fields(self):
         """AnimationData should require all non-optional fields."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AnimationData(name="test")
 
 
@@ -175,7 +177,7 @@ class TestTransitionData:
 
     def test_transition_data_requires_all_fields(self):
         """TransitionData should require all fields."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TransitionData(property="opacity")
 
 
@@ -211,7 +213,7 @@ class TestInteractionState:
 
     def test_interaction_state_requires_all_fields(self):
         """InteractionState should require all fields."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             InteractionState(type=InteractionType.CLICK)
 
 
@@ -245,7 +247,7 @@ class TestAsset:
 
     def test_asset_requires_required_fields(self):
         """Asset should require type, original_url, local_path, and file_size_bytes."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Asset(type=AssetType.SVG)
 
 
@@ -279,7 +281,7 @@ class TestExternalLibrary:
 
     def test_external_library_requires_required_fields(self):
         """ExternalLibrary should require name, source_url, and usage_snippets."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ExternalLibrary(name="Test")
 
 
@@ -314,7 +316,7 @@ class TestResponsiveBreakpoint:
 
     def test_responsive_breakpoint_requires_all_fields(self):
         """ResponsiveBreakpoint should require all fields."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ResponsiveBreakpoint(width=768)
 
 
@@ -338,5 +340,5 @@ class TestAnimationRecording:
 
     def test_animation_recording_requires_all_fields(self):
         """AnimationRecording should require all fields."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AnimationRecording(video_path="/test.mp4")
