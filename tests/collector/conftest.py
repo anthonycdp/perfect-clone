@@ -17,9 +17,24 @@ from playwright.sync_api import Page
 from collector.browser import BrowserManager
 
 
-@pytest.fixture
+def pytest_configure(config):
+    """Disable asyncio and anyio plugins for collector tests.
+
+    Playwright sync API cannot run inside an asyncio event loop,
+    so we need to disable these plugins for browser tests.
+    """
+    config.pluginmanager.set_blocked("asyncio")
+    config.pluginmanager.set_blocked("anyio")
+
+
+@pytest.fixture(scope="session")
 def browser():
-    """Create and cleanup browser for tests."""
+    """Create and cleanup browser for tests.
+
+    Uses session scope to avoid event loop conflicts between tests.
+    Playwright sync API creates an event loop that persists across tests,
+    so we reuse the same browser instance throughout the session.
+    """
     manager = BrowserManager(headless=True)
     manager.start()
     yield manager
@@ -28,6 +43,12 @@ def browser():
 
 @pytest.fixture
 def page(browser: BrowserManager) -> Page:
-    """Create a page navigated to example.com for testing."""
-    browser.navigate("https://example.com", timeout=15000)
-    return browser.page
+    """Create a new page for each test.
+
+    Creates a fresh page (tab) for each test to ensure isolation
+    while reusing the same browser instance.
+    """
+    # Create a new page for this test
+    new_page = browser.browser.new_page()
+    yield new_page
+    new_page.close()
