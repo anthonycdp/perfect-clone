@@ -50,5 +50,7 @@ def page(browser: BrowserManager) -> Page:
     """
     # Create a new page for this test
     new_page = browser.browser.new_page()
+    # Navigate to example.com for tests
+    new_page.goto("https://example.com", wait_until="networkidle")
     yield new_page
     new_page.close()
