@@ -253,3 +253,153 @@ const App = {
         };
         document.getElementById('query').placeholder = placeholders[this.state.strategy];
     },
+
+    // Extraction
+    async startExtraction() {
+        if (!this.validateCurrentStep()) return;
+
+        this.saveCurrentStepData();
+        this.showState('progress');
+        this.state.isExtracting = true;
+
+        try {
+            const response = await fetch('/api/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: this.state.url,
+                    mode: this.state.mode,
+                    strategy: this.state.strategy,
+                    query: this.state.query
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Falha ao iniciar extracao');
+            }
+
+            const { task_id } = await response.json();
+            this.state.taskId = task_id;
+            this.connectProgressStream(task_id);
+
+        } catch (error) {
+            this.showError('Erro ao iniciar extracao. Verifique a conexao.');
+        }
+    },
+
+    connectProgressStream(taskId) {
+        this.state.eventSource = new EventSource(`/api/extract/${taskId}/progress`);
+
+        this.state.eventSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            this.updateProgress(data);
+
+            if (data.done) {
+                this.state.eventSource.close();
+                if (data.step_name === 'complete') {
+                    this.fetchResult(taskId);
+                } else {
+                    this.showError(data.message);
+                }
+            }
+        };
+
+        this.state.eventSource.onerror = () => {
+            this.state.eventSource.close();
+            if (this.state.isExtracting) {
+                this.showError('Conexao perdida durante a extracao');
+            }
+        };
+    },
+
+    updateProgress(data) {
+        const fill = document.querySelector('.progress-fill');
+        const percent = document.querySelector('.progress-percent');
+        const message = document.getElementById('progress-message');
+        const bar = document.querySelector('.progress-bar');
+
+        const pct = Math.round((data.step / data.total_steps) * 100);
+        fill.style.width = `${pct}%`;
+        percent.textContent = `${pct}%`;
+        message.textContent = data.message;
+
+        bar.setAttribute('aria-valuenow', pct);
+    },
+
+    async fetchResult(taskId) {
+        try {
+            const response = await fetch(`/api/extract/${taskId}/result`);
+            const result = await response.json();
+            this.showResult(result);
+            this.showToast('Extracao concluida!', 'success');
+        } catch (error) {
+            this.showError('Erro ao obter resultado');
+        }
+    },
+
+    cancelExtraction() {
+        if (this.state.eventSource) {
+            this.state.eventSource.close();
+        }
+
+        if (this.state.taskId) {
+            fetch(`/api/extract/${this.state.taskId}/cancel`, { method: 'POST' })
+                .catch(() => {});
+        }
+
+        this.state.isExtracting = false;
+        this.goToStep(4);
+        this.showToast('Extracao cancelada', 'error');
+    },
+
+    resetExtraction() {
+        this.state.query = '';
+        document.getElementById('query').value = '';
+        this.state.isExtracting = false;
+        this.state.lastError = null;
+        this.goToStep(1);
+    },
+
+    // State Transitions
+    showState(stateName) {
+        document.querySelectorAll('.wizard-step').forEach(step => {
+            step.classList.add('hidden');
+        });
+
+        const targetState = document.querySelector(`.wizard-step[data-state="${stateName}"]`);
+        if (targetState) {
+            targetState.classList.remove('hidden');
+        }
+    },
+
+    showError(message) {
+        this.state.isExtracting = false;
+        this.state.lastError = message;
+        document.getElementById('error-text').textContent = message;
+        this.showState('error');
+    },
+
+    showResult(result) {
+        this.state.isExtracting = false;
+        this.showState('result');
+
+        document.getElementById('prompt-text').textContent = result.prompt;
+
+        const screenshotContainer = document.getElementById('screenshot-container');
+        const screenshotImg = document.getElementById('screenshot-img');
+        if (result.screenshot_path) {
+            screenshotImg.src = `/screenshots/${result.screenshot_path}`;
+            screenshotContainer.classList.remove('hidden');
+        } else {
+            screenshotContainer.classList.add('hidden');
+        }
+
+        document.getElementById('json-text').textContent = JSON.stringify(result.full_json, null, 2);
+
+        const assetsList = document.getElementById('assets-list');
+        assetsList.innerHTML = result.assets.map(a => `
+            <li>${a.type}: ${a.local_path}</li>
+        `).join('');
+
+        this.switchTab('prompt');
+    },
