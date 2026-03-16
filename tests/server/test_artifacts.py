@@ -24,13 +24,15 @@ from server.artifacts import package_extraction_result
 
 def build_normalized_output(workspace_dir: Path) -> NormalizedOutput:
     """Create a normalized output whose file paths live inside the workspace."""
-    screenshot_path = workspace_dir / "screenshots" / "target.png"
+    element_screenshot_path = workspace_dir / "screenshots" / "target.png"
+    screenshot_path = workspace_dir / "screenshots" / "visual_reference.png"
     asset_path = workspace_dir / "images" / "hero.png"
     scroll_probe_frames_dir = workspace_dir / "animations" / "scroll_probe" / "frames"
     scroll_probe_video_path = workspace_dir / "animations" / "scroll_probe" / "recording.webm"
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
     asset_path.parent.mkdir(parents=True, exist_ok=True)
     scroll_probe_frames_dir.mkdir(parents=True, exist_ok=True)
+    element_screenshot_path.write_bytes(b"raw")
     screenshot_path.write_bytes(b"png")
     asset_path.write_bytes(b"asset")
     (scroll_probe_frames_dir / "frame_0000.png").write_bytes(b"frame")
@@ -51,6 +53,13 @@ def build_normalized_output(workspace_dir: Path) -> NormalizedOutput:
             bounding_box=BoundingBox(x=0, y=0, width=1200, height=500),
             depth_in_dom=2,
             screenshot_path=str(screenshot_path),
+            element_screenshot_path=str(element_screenshot_path),
+            visual_reference={
+                "promoted": True,
+                "source": "scroll_probe_frame",
+                "source_path": str(scroll_probe_frames_dir / "frame_0000.png"),
+                "reason": "Promoted from the scroll probe.",
+            },
         ),
         dom=DOMTree(
             tag="section",
@@ -128,7 +137,12 @@ def test_package_extraction_result_writes_bundle_files(tmp_path: Path):
 
     assert packaged.package_path.exists()
     assert packaged.prompt_text.startswith("Before building, inspect the files in this package")
-    assert packaged.normalized_payload["target"]["screenshot_path"] == "screenshots/target.png"
+    assert packaged.normalized_payload["target"]["screenshot_path"] == "screenshots/visual_reference.png"
+    assert packaged.normalized_payload["target"]["element_screenshot_path"] == "screenshots/target.png"
+    assert (
+        packaged.normalized_payload["target"]["visual_reference"]["source_path"]
+        == "animations/scroll_probe/frames/frame_0000.png"
+    )
     assert (
         packaged.normalized_payload["animations"]["scroll_probe"]["frames_dir"]
         == "animations/scroll_probe/frames"
@@ -138,7 +152,12 @@ def test_package_extraction_result_writes_bundle_files(tmp_path: Path):
         == "animations/scroll_probe/recording.webm"
     )
     assert packaged.manifest_payload["entrypoints"]["prompt"] == "prompt.txt"
+    assert (
+        packaged.manifest_payload["entrypoints"]["element_screenshot"]
+        == "screenshots/target.png"
+    )
     assert packaged.manifest_payload["scroll_probe"]["video_path"] == "animations/scroll_probe/recording.webm"
+    assert packaged.manifest_payload["visual_reference"]["promoted"] is True
     assert "manifest.json" in packaged.manifest_payload["files"]
 
     with zipfile.ZipFile(packaged.package_path) as archive:
@@ -148,6 +167,7 @@ def test_package_extraction_result_writes_bundle_files(tmp_path: Path):
     assert "README.md" in names
     assert "manifest.json" in names
     assert "normalized.json" in names
+    assert "screenshots/visual_reference.png" in names
     assert "screenshots/target.png" in names
     assert "animations/scroll_probe/frames/frame_0000.png" in names
     assert "animations/scroll_probe/recording.webm" in names

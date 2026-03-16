@@ -1,11 +1,13 @@
 """Pipeline orchestrator for component and full-page extraction."""
 
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
 from playwright.async_api import Locator
+from PIL import Image
 
 from collector import (
     AnimationRecorder,
@@ -154,7 +156,7 @@ class ExtractionOrchestrator:
             query,
         )
         target = scope.target
-        screenshot_path = await self._capture_target_screenshot(target)
+        element_screenshot_path = await self._capture_target_screenshot(target)
 
         self._check_cancelled(cancel_check)
         self._report_progress(progress_callback, 2, mode)
@@ -184,6 +186,12 @@ class ExtractionOrchestrator:
             style_limitations,
             shared_data.pop("collection_limitations", []),
         )
+        screenshot_path, visual_reference = self._resolve_component_visual_reference(
+            element_screenshot_path=element_screenshot_path,
+            scroll_probe=scroll_probe,
+            runtime_scroll_effects=runtime_scroll_effects,
+            rich_media=shared_data.get("rich_media", []),
+        )
 
         return {
             "mode": mode.value,
@@ -195,6 +203,8 @@ class ExtractionOrchestrator:
                 "bounding_box": dom_data["bounding_box"],
                 "depth": dom_data["depth"],
                 "screenshot_path": screenshot_path,
+                "element_screenshot_path": element_screenshot_path,
+                "visual_reference": visual_reference,
                 "frame_url": scope.frame_url,
                 "frame_name": scope.frame_name,
                 "same_origin_accessible": scope.same_origin_accessible,
@@ -226,7 +236,7 @@ class ExtractionOrchestrator:
         self._check_cancelled(cancel_check)
         self._report_progress(progress_callback, 1, mode)
         scroll_completed = await self._load_lazy_content(scope=full_page_scope)
-        page_screenshot_path = await self._capture_full_page_screenshot(
+        document_screenshot_path = await self._capture_full_page_screenshot(
             page_root,
             full_page_scope,
         )
@@ -261,6 +271,10 @@ class ExtractionOrchestrator:
             page_sections,
             full_page_scope,
             cancel_check,
+        )
+        page_screenshot_path = self._resolve_full_page_visual_reference(
+            document_screenshot_path,
+            section_captures,
         )
 
         return {
@@ -506,14 +520,232 @@ class ExtractionOrchestrator:
 
     async def _capture_target_screenshot(self, target: Locator) -> str | None:
         """Capture a stable screenshot of the target element."""
-        screenshot_path = self._build_screenshot_path("target")
+        return await self._capture_locator_screenshot(
+            target,
+            self._build_screenshot_path("target"),
+            clip_to_visible=True,
+        )
 
-        try:
-            await target.screenshot(path=str(screenshot_path), animations="disabled")
-        except Exception:
+    def _resolve_component_visual_reference(
+        self,
+        element_screenshot_path: str | None,
+        scroll_probe: dict | None,
+        runtime_scroll_effects: list[str],
+        rich_media: list[dict],
+    ) -> tuple[str | None, dict[str, str | bool | None]]:
+        """Choose the primary screenshot for runtime-heavy components."""
+        default_reference = self._build_visual_reference_payload(
+            promoted=False,
+            source="element_screenshot",
+            source_path=element_screenshot_path,
+            reason=None,
+        )
+        if not element_screenshot_path:
+            return None, default_reference
+
+        if not self._should_promote_component_visual_reference(
+            scroll_probe,
+            runtime_scroll_effects,
+            rich_media,
+        ):
+            return element_screenshot_path, default_reference
+
+        promoted_source = self._select_scroll_probe_frame_path(scroll_probe)
+        if promoted_source is None:
+            return element_screenshot_path, default_reference
+
+        promoted_path = self._promote_visual_reference(promoted_source)
+        if promoted_path is None:
+            return element_screenshot_path, default_reference
+
+        return str(promoted_path.resolve()), self._build_visual_reference_payload(
+            promoted=True,
+            source="scroll_probe_frame",
+            source_path=str(promoted_source.resolve()),
+            reason=(
+                "Promoted a scroll-probe frame because the component depends on "
+                "runtime scroll or document-level media for its final look."
+            ),
+        )
+
+    def _should_promote_component_visual_reference(
+        self,
+        scroll_probe: dict | None,
+        runtime_scroll_effects: list[str],
+        rich_media: list[dict],
+    ) -> bool:
+        """Return True when runtime evidence should override the raw element shot."""
+        if not scroll_probe or not scroll_probe.get("triggered"):
+            return False
+
+        has_runtime_scroll_effects = bool(runtime_scroll_effects)
+        has_document_level_media = any(
+            media.get("document_level") for media in rich_media
+        )
+        has_runtime_canvas = any(
+            media.get("type") in {"webgl", "canvas"} for media in rich_media
+        )
+        return (
+            has_runtime_scroll_effects
+            or has_document_level_media
+            or has_runtime_canvas
+        )
+
+    def _select_scroll_probe_frame_path(self, scroll_probe: dict | None) -> Path | None:
+        """Return the best available scroll-probe frame for visual reference promotion."""
+        if not scroll_probe:
             return None
 
-        return str(screenshot_path.resolve())
+        frames_dir = scroll_probe.get("frames_dir")
+        if not frames_dir:
+            return None
+
+        key_frames = scroll_probe.get("key_frames") or []
+        frame_indexes: list[int] = []
+        for candidate in [*key_frames, 0]:
+            if isinstance(candidate, int) and candidate not in frame_indexes:
+                frame_indexes.append(candidate)
+
+        probe_frames_dir = Path(frames_dir)
+        for index in frame_indexes:
+            frame_path = probe_frames_dir / f"frame_{index:04d}.png"
+            if frame_path.exists():
+                return frame_path
+
+        return None
+
+    def _promote_visual_reference(self, source_path: Path) -> Path | None:
+        """Copy a scroll-probe frame to a stable screenshot path."""
+        destination = Path(self.output_dir) / "screenshots" / "visual_reference.png"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copyfile(source_path, destination)
+        except Exception:
+            return None
+        return destination
+
+    def _build_visual_reference_payload(
+        self,
+        promoted: bool,
+        source: str,
+        source_path: str | None,
+        reason: str | None,
+    ) -> dict[str, str | bool | None]:
+        """Build a serializable description of the chosen visual reference."""
+        return {
+            "promoted": promoted,
+            "source": source,
+            "source_path": source_path,
+            "reason": reason,
+        }
+
+    def _resolve_full_page_visual_reference(
+        self,
+        document_screenshot_path: str | None,
+        section_captures: list[dict],
+    ) -> str | None:
+        """Choose the best primary screenshot for a full-page extraction."""
+        section_screenshot_paths = [
+            Path(path)
+            for section in section_captures
+            if (path := section.get("screenshot_path"))
+        ]
+        if not section_screenshot_paths:
+            return document_screenshot_path
+
+        if document_screenshot_path and not self._should_promote_full_page_visual_reference(
+            Path(document_screenshot_path),
+        ):
+            return document_screenshot_path
+
+        stitched_path = self._build_full_page_visual_reference(section_screenshot_paths)
+        if stitched_path is None:
+            return document_screenshot_path
+        return str(stitched_path.resolve())
+
+    def _should_promote_full_page_visual_reference(self, screenshot_path: Path) -> bool:
+        """Return True when the raw full-page screenshot is visually sparse."""
+        if not screenshot_path.exists():
+            return True
+
+        try:
+            with Image.open(screenshot_path) as image:
+                sample = image.convert("RGB")
+                sample.thumbnail((96, 512))
+                sample_width, sample_height = sample.size
+                pixels = [
+                    sample.getpixel((x, y))
+                    for y in range(sample_height)
+                    for x in range(sample_width)
+                ]
+        except Exception:
+            return False
+
+        if not pixels:
+            return False
+
+        sparse_pixels = 0
+        for red, green, blue in pixels:
+            max_delta = max(abs(red - green), abs(green - blue), abs(red - blue))
+            if red >= 245 and green >= 245 and blue >= 245 and max_delta <= 8:
+                sparse_pixels += 1
+
+        return (sparse_pixels / len(pixels)) >= 0.55
+
+    def _build_full_page_visual_reference(
+        self,
+        section_screenshot_paths: list[Path],
+    ) -> Path | None:
+        """Build a stitched landing overview from section screenshots."""
+        valid_paths = [path for path in section_screenshot_paths if path.exists()]
+        if not valid_paths:
+            return None
+
+        destination = Path(self.output_dir) / "screenshots" / "page_visual_reference.png"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        prepared_images: list[tuple[Image.Image, tuple[int, int]]] = []
+        target_width = 0
+        for path in valid_paths:
+            try:
+                image = Image.open(path).convert("RGB")
+            except Exception:
+                continue
+            target_width = max(target_width, image.width)
+            prepared_images.append((image, (image.width, image.height)))
+
+        if not prepared_images or target_width <= 0:
+            for image, _ in prepared_images:
+                image.close()
+            return None
+
+        resized_images: list[Image.Image] = []
+        total_height = 0
+        try:
+            for image, (width, height) in prepared_images:
+                if width == target_width:
+                    resized = image.copy()
+                else:
+                    scaled_height = max(1, round(height * (target_width / width)))
+                    resized = image.resize((target_width, scaled_height), Image.Resampling.LANCZOS)
+                resized_images.append(resized)
+                total_height += resized.height
+
+            canvas = Image.new("RGB", (target_width, total_height))
+            current_y = 0
+            for image in resized_images:
+                canvas.paste(image, (0, current_y))
+                current_y += image.height
+            canvas.save(destination, format="PNG")
+            canvas.close()
+            return destination
+        except Exception:
+            return None
+        finally:
+            for image, _ in prepared_images:
+                image.close()
+            for image in resized_images:
+                image.close()
 
     async def _capture_page_screenshot(self) -> str | None:
         """Capture a stable screenshot of the full page."""
@@ -548,9 +780,23 @@ class ExtractionOrchestrator:
         self,
         target: Locator,
         destination: Path,
+        clip_to_visible: bool = False,
     ) -> str | None:
         """Capture a screenshot for an arbitrary locator."""
         destination.parent.mkdir(parents=True, exist_ok=True)
+
+        if clip_to_visible:
+            visible_clip = await self._build_visible_locator_clip(target)
+            if visible_clip is not None:
+                try:
+                    await self.browser.page.screenshot(
+                        path=str(destination),
+                        clip=visible_clip,
+                        animations="disabled",
+                    )
+                    return str(destination.resolve())
+                except Exception:
+                    pass
 
         try:
             await target.screenshot(path=str(destination), animations="disabled")
@@ -558,6 +804,52 @@ class ExtractionOrchestrator:
             return None
 
         return str(destination.resolve())
+
+    async def _build_visible_locator_clip(
+        self,
+        target: Locator,
+    ) -> dict[str, float] | None:
+        """Return the intersection between the locator box and the current viewport."""
+        try:
+            await target.scroll_into_view_if_needed()
+            box = await target.bounding_box()
+        except Exception:
+            return None
+
+        if box is None:
+            return None
+
+        viewport = self.browser.page.viewport_size
+        if viewport is None:
+            return None
+
+        right_edge = box["x"] + box["width"]
+        bottom_edge = box["y"] + box["height"]
+        overflows_viewport = (
+            box["x"] < 0
+            or box["y"] < 0
+            or right_edge > viewport["width"]
+            or bottom_edge > viewport["height"]
+        )
+        if not overflows_viewport:
+            return None
+
+        left = max(0.0, box["x"])
+        top = max(0.0, box["y"])
+        right = min(float(viewport["width"]), right_edge)
+        bottom = min(float(viewport["height"]), bottom_edge)
+        width = right - left
+        height = bottom - top
+
+        if width < 1 or height < 1:
+            return None
+
+        return {
+            "x": left,
+            "y": top,
+            "width": width,
+            "height": height,
+        }
 
     async def _resolve_full_page_root(self) -> tuple[Locator, ExtractionScope]:
         """Choose the document that should be treated as the full-page extraction root."""

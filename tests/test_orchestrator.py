@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from PIL import Image
 
 import orchestrator as orchestrator_module
 from collector.extraction_scope import ExtractionScope
@@ -311,6 +312,153 @@ async def test_extract_full_page_skips_target_lookup(monkeypatch):
     browser.start.assert_awaited_once()
     browser.navigate.assert_awaited_once_with("https://example.com")
     browser.close.assert_awaited_once()
+
+
+async def test_capture_target_screenshot_clips_oversized_elements(tmp_path):
+    """Oversized targets should use a viewport-clipped page screenshot."""
+    orchestrator = orchestrator_module.ExtractionOrchestrator(
+        api_key="test-key",
+        output_dir=str(tmp_path),
+    )
+    page = Mock()
+    page.viewport_size = {"width": 1280, "height": 900}
+    page.screenshot = AsyncMock()
+    orchestrator.browser = Mock(page=page)
+
+    target = Mock()
+    target.scroll_into_view_if_needed = AsyncMock()
+    target.bounding_box = AsyncMock(
+        return_value={"x": 0, "y": 0, "width": 1280, "height": 3150}
+    )
+    target.screenshot = AsyncMock()
+
+    screenshot_path = await orchestrator._capture_target_screenshot(target)
+
+    assert screenshot_path is not None
+    page.screenshot.assert_awaited_once()
+    assert page.screenshot.await_args.kwargs["clip"] == {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1280.0,
+        "height": 900.0,
+    }
+    target.screenshot.assert_not_awaited()
+
+
+async def test_capture_target_screenshot_keeps_locator_capture_for_normal_size_elements(
+    tmp_path,
+):
+    """Normal-sized targets should still use locator.screenshot()."""
+    orchestrator = orchestrator_module.ExtractionOrchestrator(
+        api_key="test-key",
+        output_dir=str(tmp_path),
+    )
+    page = Mock()
+    page.viewport_size = {"width": 1280, "height": 900}
+    page.screenshot = AsyncMock()
+    orchestrator.browser = Mock(page=page)
+
+    target = Mock()
+    target.scroll_into_view_if_needed = AsyncMock()
+    target.bounding_box = AsyncMock(
+        return_value={"x": 100, "y": 80, "width": 420, "height": 240}
+    )
+    target.screenshot = AsyncMock()
+
+    screenshot_path = await orchestrator._capture_target_screenshot(target)
+
+    assert screenshot_path is not None
+    page.screenshot.assert_not_awaited()
+    target.screenshot.assert_awaited_once()
+
+
+async def test_resolve_component_visual_reference_promotes_scroll_probe_frame(tmp_path):
+    """Runtime-heavy components should promote a scroll-probe frame to primary screenshot."""
+    orchestrator = orchestrator_module.ExtractionOrchestrator(
+        api_key="test-key",
+        output_dir=str(tmp_path),
+    )
+    element_screenshot = tmp_path / "screenshots" / "target.png"
+    probe_frames = tmp_path / "animations" / "scroll_probe" / "frames"
+    promoted_source = probe_frames / "frame_0003.png"
+    element_screenshot.parent.mkdir(parents=True, exist_ok=True)
+    probe_frames.mkdir(parents=True, exist_ok=True)
+    element_screenshot.write_bytes(b"raw")
+    promoted_source.write_bytes(b"probe")
+
+    screenshot_path, visual_reference = orchestrator._resolve_component_visual_reference(
+        element_screenshot_path=str(element_screenshot),
+        scroll_probe={
+            "triggered": True,
+            "frames_dir": str(probe_frames),
+            "key_frames": [3, 7],
+        },
+        runtime_scroll_effects=["Document-level media changes during scroll."],
+        rich_media=[{"type": "webgl", "document_level": True}],
+    )
+
+    assert screenshot_path == str(
+        (tmp_path / "screenshots" / "visual_reference.png").resolve()
+    )
+    assert visual_reference["promoted"] is True
+    assert visual_reference["source"] == "scroll_probe_frame"
+    assert visual_reference["source_path"] == str(promoted_source.resolve())
+    assert (tmp_path / "screenshots" / "visual_reference.png").read_bytes() == b"probe"
+
+
+async def test_resolve_full_page_visual_reference_promotes_section_overview(tmp_path):
+    """Whitespace-dominated page screenshots should be replaced by a stitched section overview."""
+    orchestrator = orchestrator_module.ExtractionOrchestrator(
+        api_key="test-key",
+        output_dir=str(tmp_path),
+    )
+    raw_page = tmp_path / "screenshots" / "page.png"
+    section_one = tmp_path / "sections" / "section-01" / "screenshot.png"
+    section_two = tmp_path / "sections" / "section-02" / "screenshot.png"
+    raw_page.parent.mkdir(parents=True, exist_ok=True)
+    section_one.parent.mkdir(parents=True, exist_ok=True)
+    section_two.parent.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 3000), "white").save(raw_page)
+    Image.new("RGB", (700, 300), "black").save(section_one)
+    Image.new("RGB", (700, 500), "navy").save(section_two)
+
+    resolved = orchestrator._resolve_full_page_visual_reference(
+        str(raw_page),
+        [
+            {"screenshot_path": str(section_one)},
+            {"screenshot_path": str(section_two)},
+        ],
+    )
+
+    assert resolved == str(
+        (tmp_path / "screenshots" / "page_visual_reference.png").resolve()
+    )
+    with Image.open(resolved) as stitched:
+        assert stitched.width == 700
+        assert stitched.height == 800
+
+
+async def test_resolve_full_page_visual_reference_keeps_informative_capture(tmp_path):
+    """Informative page screenshots should remain the primary full-page image."""
+    orchestrator = orchestrator_module.ExtractionOrchestrator(
+        api_key="test-key",
+        output_dir=str(tmp_path),
+    )
+    raw_page = tmp_path / "screenshots" / "page.png"
+    section_one = tmp_path / "sections" / "section-01" / "screenshot.png"
+    raw_page.parent.mkdir(parents=True, exist_ok=True)
+    section_one.parent.mkdir(parents=True, exist_ok=True)
+
+    Image.new("RGB", (800, 1200), "black").save(raw_page)
+    Image.new("RGB", (700, 300), "navy").save(section_one)
+
+    resolved = orchestrator._resolve_full_page_visual_reference(
+        str(raw_page),
+        [{"screenshot_path": str(section_one)}],
+    )
+
+    assert resolved == str(raw_page)
 
 
 async def test_extract_component_passes_frame_scope(monkeypatch):

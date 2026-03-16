@@ -65,7 +65,14 @@ def test_build_component_output():
         "html": "<section class='hero'></section>",
         "bounding_box": {"x": 0, "y": 100, "width": 1200, "height": 600},
         "depth": 3,
-        "screenshot_path": "/tmp/hero.png",
+        "screenshot_path": "/tmp/visual_reference.png",
+        "element_screenshot_path": "/tmp/hero.png",
+        "visual_reference": {
+            "promoted": True,
+            "source": "scroll_probe_frame",
+            "source_path": "/tmp/scroll_probe/frames/frame_0000.png",
+            "reason": "Promoted from the scroll probe.",
+        },
         "frame_url": "https://example.com/embed",
         "frame_name": "hero-frame",
         "same_origin_accessible": False,
@@ -120,7 +127,10 @@ def test_build_component_output():
 
     assert result.mode == ExtractionMode.COMPONENT
     assert result.target.selector_used == ".hero"
-    assert result.get_primary_screenshot_path() == "/tmp/hero.png"
+    assert result.get_primary_screenshot_path() == "/tmp/visual_reference.png"
+    assert result.target.element_screenshot_path == "/tmp/hero.png"
+    assert result.target.visual_reference.promoted is True
+    assert result.target.visual_reference.source_path == "/tmp/scroll_probe/frames/frame_0000.png"
     assert result.target.frame_url == "https://example.com/embed"
     assert result.target.same_origin_accessible is False
     assert result.target.within_shadow_dom is True

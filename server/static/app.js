@@ -18,6 +18,7 @@ const App = {
         this.bindEvents();
         this.loadTheme();
         this.initKeyboardNav();
+        this.updateStepFourForMode();
     },
 
     // Event Bindings
@@ -115,6 +116,10 @@ const App = {
         const prevStep = this.state.currentStep;
         this.state.currentStep = stepNum;
 
+        // Remove result-mode class when navigating to steps
+        const wizardCard = document.querySelector('.wizard-card');
+        wizardCard.classList.remove('result-mode');
+
         // Hide all steps
         document.querySelectorAll('.wizard-step[data-step]').forEach(step => {
             step.classList.add('hidden');
@@ -138,12 +143,12 @@ const App = {
         this.updateDots();
 
         if (stepNum === 4) {
-            this.updateQueryPlaceholder();
+            this.updateStepFourForMode();
         }
 
-        const firstInput = targetStep?.querySelector('input, textarea');
-        if (firstInput) {
-            setTimeout(() => firstInput.focus(), 100);
+        const firstFocusable = targetStep?.querySelector('input:not([disabled]), textarea:not([disabled]), button');
+        if (firstFocusable) {
+            setTimeout(() => firstFocusable.focus(), 100);
         }
     },
 
@@ -192,6 +197,11 @@ const App = {
     },
 
     validateQuery() {
+        if (this.isFullPageMode()) {
+            document.getElementById('query-error').textContent = '';
+            return true;
+        }
+
         const query = document.getElementById('query').value.trim();
         const errorEl = document.getElementById('query-error');
 
@@ -211,7 +221,9 @@ const App = {
                 this.state.url = document.getElementById('url').value.trim();
                 break;
             case 4:
-                this.state.query = document.getElementById('query').value.trim();
+                this.state.query = this.isFullPageMode()
+                    ? ''
+                    : document.getElementById('query').value.trim();
                 break;
         }
     },
@@ -228,9 +240,11 @@ const App = {
 
         if (type === 'mode') {
             this.state.mode = card.dataset.value;
+            this.updateStepFourForMode();
         } else if (type === 'strategy') {
             this.state.strategy = card.dataset.value;
             this.updateStrategyDescription();
+            this.updateStepFourForMode();
         }
     },
 
@@ -254,6 +268,33 @@ const App = {
         document.getElementById('query').placeholder = placeholders[this.state.strategy];
     },
 
+    updateStepFourForMode() {
+        const title = document.getElementById('step4-title');
+        const subtitle = document.getElementById('step4-subtitle');
+        const queryGroup = document.getElementById('query-group');
+        const queryInput = document.getElementById('query');
+
+        if (this.isFullPageMode()) {
+            title.textContent = 'Pronto para extrair a landing page?';
+            subtitle.textContent = 'Nao e necessario informar um seletor extra. Vamos usar apenas a URL e analisar a pagina inteira.';
+            queryGroup.classList.add('hidden');
+            queryInput.value = '';
+            queryInput.disabled = true;
+            document.getElementById('query-error').textContent = '';
+            return;
+        }
+
+        title.textContent = 'O que voce quer buscar?';
+        subtitle.textContent = 'Informe o seletor, texto ou trecho HTML para localizar o componente.';
+        queryGroup.classList.remove('hidden');
+        queryInput.disabled = false;
+        this.updateQueryPlaceholder();
+    },
+
+    isFullPageMode() {
+        return this.state.mode === 'full_page';
+    },
+
     // Extraction
     async startExtraction() {
         if (!this.validateCurrentStep()) return;
@@ -275,7 +316,7 @@ const App = {
             });
 
             if (!response.ok) {
-                throw new Error('Falha ao iniciar extracao');
+                throw new Error(await this.buildErrorMessage(response, 'Falha ao iniciar extracao'));
             }
 
             const { task_id } = await response.json();
@@ -283,7 +324,7 @@ const App = {
             this.connectProgressStream(task_id);
 
         } catch (error) {
-            this.showError('Erro ao iniciar extracao. Verifique a conexao.');
+            this.showError(error.message || 'Erro ao iniciar extracao. Verifique a conexao.');
         }
     },
 
@@ -296,6 +337,7 @@ const App = {
 
             if (data.done) {
                 this.state.eventSource.close();
+                this.state.eventSource = null;
                 if (data.step_name === 'complete') {
                     this.fetchResult(taskId);
                 } else {
@@ -329,17 +371,21 @@ const App = {
     async fetchResult(taskId) {
         try {
             const response = await fetch(`/api/extract/${taskId}/result`);
+            if (!response.ok) {
+                throw new Error(await this.buildErrorMessage(response, 'Erro ao obter resultado'));
+            }
             const result = await response.json();
             this.showResult(result);
             this.showToast('Extracao concluida!', 'success');
         } catch (error) {
-            this.showError('Erro ao obter resultado');
+            this.showError(error.message || 'Erro ao obter resultado');
         }
     },
 
     cancelExtraction() {
         if (this.state.eventSource) {
             this.state.eventSource.close();
+            this.state.eventSource = null;
         }
 
         if (this.state.taskId) {
@@ -348,33 +394,63 @@ const App = {
         }
 
         this.state.isExtracting = false;
+        this.state.taskId = null;
         this.goToStep(4);
         this.showToast('Extracao cancelada', 'error');
     },
 
     resetExtraction() {
+        if (this.state.eventSource) {
+            this.state.eventSource.close();
+            this.state.eventSource = null;
+        }
+
         this.state.query = '';
-        document.getElementById('query').value = '';
+        this.state.taskId = null;
         this.state.isExtracting = false;
         this.state.lastError = null;
+        document.getElementById('query').value = '';
+        document.getElementById('prompt-text').textContent = '';
+        document.getElementById('json-text').textContent = '';
+        document.getElementById('assets-list').innerHTML = '';
+        document.getElementById('package-expiry').classList.add('hidden');
+        const packageButton = document.getElementById('btn-download-package');
+        packageButton.classList.add('hidden');
+        packageButton.removeAttribute('href');
+        this.updateStepFourForMode();
         this.goToStep(1);
     },
 
     // State Transitions
     showState(stateName) {
+        const wizardCard = document.querySelector('.wizard-card');
+
+        // Hide all steps
         document.querySelectorAll('.wizard-step').forEach(step => {
             step.classList.add('hidden');
         });
 
+        // Show target state
         const targetState = document.querySelector(`.wizard-step[data-state="${stateName}"]`);
         if (targetState) {
             targetState.classList.remove('hidden');
+        }
+
+        // Toggle result-mode class for expanded layout
+        if (stateName === 'result') {
+            wizardCard.classList.add('result-mode');
+        } else {
+            wizardCard.classList.remove('result-mode');
         }
     },
 
     showError(message) {
         this.state.isExtracting = false;
         this.state.lastError = message;
+        if (this.state.eventSource) {
+            this.state.eventSource.close();
+            this.state.eventSource = null;
+        }
         document.getElementById('error-text').textContent = message;
         this.showState('error');
     },
@@ -386,20 +462,46 @@ const App = {
         document.getElementById('prompt-text').textContent = result.prompt;
 
         const screenshotContainer = document.getElementById('screenshot-container');
+        const screenshotPlaceholder = document.getElementById('screenshot-placeholder');
         const screenshotImg = document.getElementById('screenshot-img');
-        if (result.screenshot_path) {
-            screenshotImg.src = `/screenshots/${result.screenshot_path}`;
+
+        if (result.screenshot_url) {
+            screenshotImg.src = result.screenshot_url;
             screenshotContainer.classList.remove('hidden');
+            screenshotPlaceholder.classList.add('hidden');
         } else {
+            screenshotImg.removeAttribute('src');
             screenshotContainer.classList.add('hidden');
+            screenshotPlaceholder.classList.remove('hidden');
         }
 
         document.getElementById('json-text').textContent = JSON.stringify(result.full_json, null, 2);
 
         const assetsList = document.getElementById('assets-list');
-        assetsList.innerHTML = result.assets.map(a => `
-            <li>${a.type}: ${a.local_path}</li>
-        `).join('');
+        const assets = Array.isArray(result.assets) ? result.assets : [];
+        assetsList.innerHTML = assets.length
+            ? assets.map(asset => this.buildAssetListItem(asset)).join('')
+            : '<li>Nenhum asset disponivel.</li>';
+
+        const packageButton = document.getElementById('btn-download-package');
+        if (result.download_url) {
+            packageButton.href = result.download_url;
+            packageButton.setAttribute('download', result.download_filename || 'component-extractor.zip');
+            packageButton.classList.remove('hidden');
+        } else {
+            packageButton.classList.add('hidden');
+            packageButton.removeAttribute('href');
+        }
+
+        const packageExpiry = document.getElementById('package-expiry');
+        const expiryLabel = this.formatExpiry(result.expires_at);
+        if (expiryLabel) {
+            packageExpiry.textContent = `Pacote disponivel ate ${expiryLabel}`;
+            packageExpiry.classList.remove('hidden');
+        } else {
+            packageExpiry.textContent = '';
+            packageExpiry.classList.add('hidden');
+        }
 
         this.switchTab('prompt');
     },
@@ -421,8 +523,55 @@ const App = {
     // Utilities
     async copyPrompt() {
         const text = document.getElementById('prompt-text').textContent;
+        if (!text) {
+            return;
+        }
         await navigator.clipboard.writeText(text);
         this.showToast('Copiado!', 'success');
+    },
+
+    buildAssetListItem(asset) {
+        const type = this.escapeHtml(asset.type || 'asset');
+        const label = this.escapeHtml(asset.filename || asset.local_path || asset.original_url || 'arquivo');
+        if (asset.url) {
+            const url = this.escapeHtml(asset.url);
+            return `<li>${type}: <a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a></li>`;
+        }
+        return `<li>${type}: ${label}</li>`;
+    },
+
+    formatExpiry(expiresAt) {
+        if (!expiresAt) {
+            return '';
+        }
+
+        const parsed = new Date(expiresAt);
+        if (Number.isNaN(parsed.getTime())) {
+            return '';
+        }
+
+        return parsed.toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    },
+
+    async buildErrorMessage(response, fallbackMessage) {
+        try {
+            const payload = await response.json();
+            return payload.detail || payload.message || fallbackMessage;
+        } catch {
+            return fallbackMessage;
+        }
+    },
+
+    escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     },
 
     showToast(message, type = 'success') {

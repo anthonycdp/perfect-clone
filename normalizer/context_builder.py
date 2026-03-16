@@ -15,6 +15,7 @@ from models.normalized import (
     TargetInfo,
     InteractionSummary,
     ResponsiveBehavior,
+    VisualReferenceInfo,
 )
 from normalizer.transformers import DOMTransformer, StyleTransformer, AnimationTransformer
 
@@ -112,6 +113,10 @@ class ContextBuilder:
             bounding_box=self._build_bounding_box(box_data),
             depth_in_dom=target_data.get("depth", 0),
             screenshot_path=target_data.get("screenshot_path"),
+            element_screenshot_path=target_data.get("element_screenshot_path"),
+            visual_reference=VisualReferenceInfo(
+                **(target_data.get("visual_reference") or {})
+            ),
             frame_url=target_data.get("frame_url"),
             frame_name=target_data.get("frame_name"),
             same_origin_accessible=target_data.get("same_origin_accessible", True),

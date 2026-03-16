@@ -85,8 +85,9 @@
             <!-- Step 4: Query + Execute -->
             <div class="wizard-step hidden" data-step="4" aria-label="Passo 4 de 4">
                 <span class="step-indicator">4 de 4</span>
-                <h2 class="step-title">O que voce quer buscar?</h2>
-                <div class="form-group">
+                <h2 class="step-title" id="step4-title">O que voce quer buscar?</h2>
+                <p class="step-subtitle" id="step4-subtitle">Informe o seletor, texto ou trecho HTML para localizar o componente.</p>
+                <div class="form-group" id="query-group">
                     <textarea id="query" rows="3" placeholder="Digite o texto do botao, titulo ou elemento..." aria-label="Query de busca"></textarea>
                     <span class="error-message" id="query-error"></span>
                 </div>
@@ -125,30 +126,44 @@
             <!-- Result State -->
             <div class="wizard-step hidden" data-state="result">
                 <div class="result-header">
-                    <span class="success-icon">ok</span>
+                    <span class="success-icon">OK</span>
                     <h2 class="step-title">Extracao concluida!</h2>
                 </div>
-                <div class="tabs">
-                    <button class="tab active" data-tab="prompt" aria-selected="true">Prompt</button>
-                    <button class="tab" data-tab="json" aria-selected="false">JSON</button>
-                    <button class="tab" data-tab="assets" aria-selected="false">Assets</button>
-                </div>
-                <div class="tab-content active" data-content="prompt">
-                    <div class="screenshot-preview hidden" id="screenshot-container">
-                        <img id="screenshot-img" src="" alt="Screenshot do componente">
+                <div class="result-content">
+                    <!-- Left Panel - Screenshot -->
+                    <div class="result-screenshot-panel">
+                        <h3>Screenshot</h3>
+                        <div class="screenshot-preview hidden" id="screenshot-container">
+                            <img id="screenshot-img" src="" alt="Screenshot do componente">
+                        </div>
+                        <div class="screenshot-preview" id="screenshot-placeholder">
+                            <span style="color: var(--text-secondary);">Nenhuma screenshot disponivel</span>
+                        </div>
                     </div>
-                    <div class="prompt-container">
-                        <pre id="prompt-text"></pre>
-                        <button class="btn-copy" id="btn-copy-prompt" aria-label="Copiar prompt">Copiar</button>
+                    <!-- Right Panel - Tabs -->
+                    <div class="result-tabs-panel">
+                        <div class="tabs">
+                            <button class="tab active" data-tab="prompt" aria-selected="true">Prompt</button>
+                            <button class="tab" data-tab="json" aria-selected="false">JSON</button>
+                            <button class="tab" data-tab="assets" aria-selected="false">Assets</button>
+                        </div>
+                        <div class="tab-content active" data-content="prompt">
+                            <div class="prompt-container">
+                                <button class="btn-copy" id="btn-copy-prompt" aria-label="Copiar prompt">Copiar</button>
+                                <pre id="prompt-text"></pre>
+                            </div>
+                        </div>
+                        <div class="tab-content hidden" data-content="json">
+                            <pre id="json-text"></pre>
+                        </div>
+                        <div class="tab-content hidden" data-content="assets">
+                            <ul id="assets-list"></ul>
+                        </div>
                     </div>
                 </div>
-                <div class="tab-content hidden" data-content="json">
-                    <pre id="json-text"></pre>
-                </div>
-                <div class="tab-content hidden" data-content="assets">
-                    <ul id="assets-list"></ul>
-                </div>
-                <div class="wizard-actions">
+                <div class="result-actions">
+                    <span class="result-meta hidden" id="package-expiry"></span>
+                    <a class="btn-primary hidden" id="btn-download-package" href="#" download>Baixar Pacote</a>
                     <button class="btn-secondary" id="btn-new-extraction">Nova Extracao</button>
                 </div>
             </div>

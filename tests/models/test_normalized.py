@@ -78,7 +78,14 @@ class TestTargetInfo:
             html="<div class=\"hero-section\">Content</div>",
             bounding_box=BoundingBox(x=0, y=100, width=1200, height=600),
             depth_in_dom=5,
-            screenshot_path="/output/screenshots/target.png",
+            screenshot_path="/output/screenshots/visual_reference.png",
+            element_screenshot_path="/output/screenshots/target.png",
+            visual_reference={
+                "promoted": True,
+                "source": "scroll_probe_frame",
+                "source_path": "/output/animations/scroll_probe/frame_0000.png",
+                "reason": "Promoted from the scroll probe.",
+            },
             frame_url="https://example.com",
             frame_name="main",
             same_origin_accessible=True,
@@ -89,7 +96,9 @@ class TestTargetInfo:
         assert target_info.html == "<div class=\"hero-section\">Content</div>"
         assert target_info.bounding_box.width == 1200
         assert target_info.depth_in_dom == 5
-        assert target_info.screenshot_path == "/output/screenshots/target.png"
+        assert target_info.screenshot_path == "/output/screenshots/visual_reference.png"
+        assert target_info.element_screenshot_path == "/output/screenshots/target.png"
+        assert target_info.visual_reference.promoted is True
         assert target_info.frame_url == "https://example.com"
         assert target_info.frame_name == "main"
 

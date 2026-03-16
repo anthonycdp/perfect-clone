@@ -28,6 +28,15 @@ class PageInfo(BaseModel):
     loaded_stylesheets: list[str]
 
 
+class VisualReferenceInfo(BaseModel):
+    """Describe how the primary visual reference for a component was chosen."""
+
+    promoted: bool = False
+    source: str = "element_screenshot"
+    source_path: Optional[str] = None
+    reason: Optional[str] = None
+
+
 class TargetInfo(BaseModel):
     """Information about the target element being extracted."""
 
@@ -37,6 +46,8 @@ class TargetInfo(BaseModel):
     bounding_box: BoundingBox
     depth_in_dom: int
     screenshot_path: Optional[str] = None
+    element_screenshot_path: Optional[str] = None
+    visual_reference: VisualReferenceInfo = Field(default_factory=VisualReferenceInfo)
     frame_url: Optional[str] = None
     frame_name: Optional[str] = None
     same_origin_accessible: bool = True

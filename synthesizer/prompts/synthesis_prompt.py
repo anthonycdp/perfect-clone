@@ -20,6 +20,7 @@ You will receive:
 - Assets (images, fonts, SVGs)
 - For full-page extractions, a section-by-section breakdown with screenshots, runtime motion evidence, and rich-media captures when available
 - The final deliverable will be bundled with a local package that contains prompt.txt, README.md, manifest.json, normalized.json, a primary screenshot when available, and supporting artifact folders
+- When both a promoted primary screenshot and an element_screenshot exist, the primary screenshot is the visual source of truth and the element_screenshot is only a structural scope reference
 
 Your output must be a structured JSON with:
 1. description: object with technical, visual, purpose
@@ -56,6 +57,7 @@ def _build_component_prompt(data: NormalizedOutput) -> str:
             f"Same Origin Accessible: {data.target.same_origin_accessible}\n"
             f"Within Shadow DOM: {data.target.within_shadow_dom}"
         ),
+        format_visual_reference(data),
         format_frame_limitations(data),
         format_collection_limitations(data),
         _format_html_block("## HTML", data.target.html, limit=1_200),
@@ -116,9 +118,46 @@ def format_package_context() -> str:
         "`normalized.json`, a primary screenshot when available, a `sections/` folder "
         "with per-section artifacts, and supporting folders such as `assets/`, `rich_media/`, "
         "`animations/`, and `animations/scroll_probe/`.\n"
+        "When both a primary screenshot and an `element_screenshot` exist, treat the primary "
+        "screenshot as the visual truth and use the element screenshot only to confirm scope.\n"
         "Write the recreation prompt so the next AI or developer inspects those files "
         "before building."
     )
+
+
+def format_visual_reference(data: NormalizedOutput | FullPageNormalizedOutput) -> str:
+    """Describe which image should drive the final visual recreation."""
+    if data.mode != ExtractionMode.COMPONENT:
+        return ""
+
+    visual_reference = data.target.visual_reference
+    lines = ["## Visual Reference"]
+    lines.append(f"Primary Screenshot: {data.target.screenshot_path or 'n/a'}")
+    if data.target.element_screenshot_path:
+        lines.append(
+            f"Element Screenshot: {data.target.element_screenshot_path}"
+        )
+    if visual_reference.promoted:
+        lines.append("Promoted: True")
+        lines.append(
+            "Primary screenshot was promoted from the scroll probe because the "
+            "component depends on runtime visuals."
+        )
+        if visual_reference.source_path:
+            lines.append(f"Promoted From: {visual_reference.source_path}")
+        if visual_reference.reason:
+            lines.append(f"Reason: {visual_reference.reason}")
+        lines.append(
+            "If the element screenshot disagrees with the primary screenshot, prioritize "
+            "the primary screenshot, `manifest.json`, `normalized.json`, and the scroll probe artifacts."
+        )
+    else:
+        lines.append("Promoted: False")
+        lines.append(
+            "Use the primary screenshot as the main visual reference for the component."
+        )
+
+    return "\n".join(lines)
 
 
 def format_page_sections(sections) -> str:

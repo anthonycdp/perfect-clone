@@ -18,7 +18,8 @@ PACKAGE_PROMPT_PREAMBLE = """Before building, inspect the files in this package 
 1. Read README.md and manifest.json first.
 2. Use normalized.json as the structured source of truth.
 3. Inspect the primary screenshot, the sections/ folder, and the assets/, rich_media/, animations/, and animations/scroll_probe/ folders.
-4. If package files and the prompt disagree, prioritize manifest.json, normalized.json, and the primary screenshot."""
+4. If an element_screenshot is also present, use it only to confirm the target bounds and DOM scope.
+5. If package files and the prompt disagree, prioritize manifest.json, normalized.json, and the primary screenshot."""
 
 
 @dataclass(slots=True)
@@ -147,6 +148,16 @@ def build_packaged_normalized_payload(
             workspace_dir,
             payload["target"].get("screenshot_path"),
         )
+        payload["target"]["element_screenshot_path"] = relative_artifact_path(
+            workspace_dir,
+            payload["target"].get("element_screenshot_path"),
+        )
+        visual_reference = payload["target"].get("visual_reference") or {}
+        visual_reference["source_path"] = relative_artifact_path(
+            workspace_dir,
+            visual_reference.get("source_path"),
+        )
+        payload["target"]["visual_reference"] = visual_reference
     else:
         payload["page_capture"]["screenshot_path"] = relative_artifact_path(
             workspace_dir,
@@ -229,7 +240,8 @@ def build_package_readme(mode: str) -> str:
         "1. Open `manifest.json` for the inventory and summary.\n"
         "2. Read `normalized.json` for structured data.\n"
         "3. Inspect the primary screenshot, the `sections/` folder, and the `assets/`, `rich_media/`, `animations/`, and `animations/scroll_probe/` folders.\n"
-        "4. Paste `prompt.txt` into your coding AI as the starting instruction.\n\n"
+        "4. When an `element_screenshot` is present, treat it as a structural scope reference, not the final visual truth.\n"
+        "5. Paste `prompt.txt` into your coding AI as the starting instruction.\n\n"
         "If the files disagree, prioritize `manifest.json`, `normalized.json`, and the primary screenshot.\n"
     )
 
@@ -276,23 +288,30 @@ def build_package_manifest(
         if normalized_payload.get("mode") == "component"
         else normalized_payload.get("page_capture", {}).get("screenshot_path")
     )
+    element_screenshot_path = normalized_payload.get("target", {}).get(
+        "element_screenshot_path"
+    )
+    visual_reference = normalized_payload.get("target", {}).get("visual_reference") or {}
     files = sorted(_list_workspace_files(workspace_dir) + ["manifest.json"])
     files = list(dict.fromkeys(files))
+    entrypoints = {
+        "prompt": "prompt.txt",
+        "readme": "README.md",
+        "manifest": "manifest.json",
+        "normalized": "normalized.json",
+        "primary_screenshot": screenshot_path,
+    }
+    if normalized_payload.get("mode") == "component":
+        entrypoints["element_screenshot"] = element_screenshot_path
 
-    return {
+    manifest = {
         "task_id": task_id,
         "mode": normalized_payload.get("mode"),
         "source_url": request.url,
         "strategy": request.strategy,
         "query": request.query,
         "created_at": datetime.now(UTC).isoformat(),
-        "entrypoints": {
-            "prompt": "prompt.txt",
-            "readme": "README.md",
-            "manifest": "manifest.json",
-            "normalized": "normalized.json",
-            "primary_screenshot": screenshot_path,
-        },
+        "entrypoints": entrypoints,
         "summary": {
             "asset_count": len(normalized_payload.get("assets", [])),
             "rich_media_count": len(normalized_payload.get("rich_media", [])),
@@ -335,6 +354,14 @@ def build_package_manifest(
         "sections": [_build_section_manifest_entry(section) for section in sections],
         "files": files,
     }
+    if normalized_payload.get("mode") == "component":
+        manifest["visual_reference"] = {
+            "promoted": bool(visual_reference.get("promoted")),
+            "source": visual_reference.get("source", "element_screenshot"),
+            "source_path": visual_reference.get("source_path"),
+            "reason": visual_reference.get("reason"),
+        }
+    return manifest
 
 
 def _create_archive(workspace_dir: Path, package_path: Path) -> None:

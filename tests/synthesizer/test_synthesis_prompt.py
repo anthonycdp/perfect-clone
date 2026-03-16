@@ -105,6 +105,39 @@ def test_build_user_prompt_for_component():
     assert "## Collection Limitations" in prompt
 
 
+def test_build_user_prompt_prioritizes_promoted_visual_reference():
+    """Component prompts should explain when the main screenshot came from the scroll probe."""
+    output = NormalizedOutput(
+        **build_shared_fields(),
+        target=TargetInfo(
+            selector_used=".hero",
+            strategy=SelectorStrategy.CSS,
+            html="<section class='hero'></section>",
+            bounding_box=BoundingBox(x=0, y=0, width=1200, height=600),
+            depth_in_dom=2,
+            screenshot_path="screenshots/visual_reference.png",
+            element_screenshot_path="screenshots/target.png",
+            visual_reference={
+                "promoted": True,
+                "source": "scroll_probe_frame",
+                "source_path": "animations/scroll_probe/frames/frame_0000.png",
+                "reason": "Promoted from the scroll probe.",
+            },
+        ),
+        collection_limitations=[],
+        rich_media=[],
+    )
+
+    prompt = build_user_prompt(output)
+
+    assert "## Visual Reference" in prompt
+    assert "Primary Screenshot: screenshots/visual_reference.png" in prompt
+    assert "Element Screenshot: screenshots/target.png" in prompt
+    assert "Promoted: True" in prompt
+    assert "Promoted From: animations/scroll_probe/frames/frame_0000.png" in prompt
+    assert "prioritize the primary screenshot" in prompt
+
+
 def test_build_user_prompt_includes_document_level_rich_media_effects():
     """Component prompts should surface document-level WebGL overlay behavior."""
     shared_fields = build_shared_fields()
