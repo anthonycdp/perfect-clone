@@ -27,11 +27,16 @@ Substituir o layout de dois painéis (input à esquerda, resultado à direita) p
 ### Fluxo de Passos
 
 ```
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│  1. URL  │ ─► │ 2. Modo  │ ─► │3.Estratég│ ─► │4. Query  │ ─► │ Progress │ ─► │ Resultado │
-└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
-     ▲                                                                │
-     └────────────────────────────────────────────────────────────────┘
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  1. URL  │ ─► │ 2. Modo  │ ─► │3.Estratég│ ─► │4. Query  │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘
+                                               │
+                                               ▼
+                                          ┌──────────┐    ┌───────────┐
+                                          │ Progress │ ─► │ Resultado │
+                                          └──────────┘    └───────────┘
+     ▲                                                                 │
+     └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Total de passos:** 4 passos de configuração + 1 estado de progresso + 1 estado de resultado
@@ -92,7 +97,7 @@ Substituir o layout de dois painéis (input à esquerda, resultado à direita) p
 
 **Valor padrão:** Texto
 
-**Nota:** Este passo pode ser simplificado ou ocultado no modo "Landing Page" (opcional - definir na implementação)
+**Comportamento no modo Landing Page:** Quando o usuário seleciona "Landing Page completa" no passo 2, este passo é pulado automaticamente (não se aplica - landing page não precisa de estratégia de busca). O fluxo vai direto do passo 2 para o passo 4, onde apenas confirma a extração.
 
 ---
 
@@ -159,11 +164,116 @@ Substituir o layout de dois painéis (input à esquerda, resultado à direita) p
 - Indicam progresso visual (preenchido = completo, vazio = pendente)
 - Não são clicáveis (navegação apenas por botões)
 
+### Comportamento do Cancelar
+
+Quando o usuário clica em "Cancelar" durante a extração:
+
+1. **Sem confirmação** - Cancelamento é imediato (extração pode ser reiniciada)
+2. **Retorna ao passo 4** - Usuário pode ajustar a query e tentar novamente
+3. **Estado preservado** - Todos os campos (URL, modo, estratégia, query) mantêm seus valores
+
+### Comportamento do Nova Extração
+
+Quando o usuário clica em "← Nova Extração" no resultado:
+
+| Campo | Comportamento |
+|-------|---------------|
+| URL | Mantém preenchida |
+| Modo | Mantém seleção |
+| Estratégia | Mantém seleção |
+| Query | Limpa (para nova busca) |
+| Resultado | Descartado |
+
+---
+
+## Tratamento de Erros
+
+### Erros de Validação (por passo)
+
+Exibidos inline abaixo do campo com problema:
+
+```
+┌─────────────────────────────────────┐
+│ https://url-invalida                │
+└─────────────────────────────────────┘
+⚠ Por favor, informe uma URL válida (http:// ou https://)
+```
+
+| Passo | Validação | Mensagem |
+|-------|-----------|----------|
+| 1 | URL vazia | "Por favor, informe uma URL" |
+| 1 | URL inválida | "Por favor, informe uma URL válida (http:// ou https://)" |
+| 4 | Query vazia | "Por favor, informe o que deseja buscar" |
+
+### Erros Durante Extração
+
+Quando a extração falha (erro de navegação, componente não encontrado, erro de API):
+
+1. **Estado de progresso** transiciona para **estado de erro**
+2. Mensagem de erro específica é exibida
+3. Botões disponíveis: "← Voltar" (passo 4) ou "Tentar Novamente"
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│                      ⚠ Erro                             │
+│                                                         │
+│         Não foi possível encontrar o componente        │
+│         com o texto "Botão Submit"                      │
+│                                                         │
+│           [← Voltar]    [Tentar Novamente]              │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Tipos de Erro
+
+| Erro | Mensagem | Ação |
+|------|----------|------|
+| `NavigationError` | "Não foi possível acessar o site" | Voltar ao passo 1 |
+| `TargetNotFoundError` | "Não foi possível encontrar o componente" | Voltar ao passo 4 |
+| `APIError` | "Erro ao processar extração" | Tentar novamente |
+| `CancellationError` | (silencioso) | Voltar ao passo 4 |
+
+---
+
+## Acessibilidade
+
+### Navegação por Teclado
+
+| Tecla | Ação |
+|-------|------|
+| `Tab` | Navega entre elementos focáveis |
+| `Enter` | Avança para próximo passo (em botões e inputs) |
+| `Escape` | Cancela extração (se em progresso) |
+| `Arrow keys` | Navega entre radio cards (quando focado) |
+
+### ARIA Labels
+
+- **Dots de progresso**: `aria-label="Passo X de 4"` + `aria-current="step"` no dot ativo
+- **Radio cards**: `role="radio"` + `aria-checked="true/false"`
+- **Botões**: Labels descritivos (ex: "Continuar para próximo passo")
+- **Progress bar**: `role="progressbar"` + `aria-valuenow`, `aria-valuemin`, `aria-valuemax`
+
+### Reduced Motion
+
+Respeitar preferência `prefers-reduced-motion`:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  .wizard-transition {
+    transition: none;
+  }
+}
+```
+
+Quando reduzido, todas as transições são instantâneas (sem animação).
+
 ---
 
 ## Layout e Responsividade
 
-### Desktop (> 768px)
+### Desktop (> 1024px)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -185,7 +295,13 @@ Substituir o layout de dois painéis (input à esquerda, resultado à direita) p
 - Padding generoso ao redor
 - Campos e botões com largura proporcional ao card
 
-### Mobile (≤ 768px)
+### Tablet (768px - 1024px)
+
+- Card centralizado com max-width de 500px
+- Cards de seleção (passo 2) em grid 2x2
+- Layout híbrido entre desktop e mobile
+
+### Mobile (< 768px)
 
 ```
 ┌─────────────────────┐
@@ -212,9 +328,11 @@ Substituir o layout de dois painéis (input à esquerda, resultado à direita) p
 
 ### Entre Passos
 
-- Tipo: Slide horizontal (fade como fallback)
-- Duração: 200-300ms
-- Direção: Direita (avançar), Esquerda (voltar)
+- **Tipo:** Slide horizontal com fade
+- **Duração:** 250ms
+- **Timing function:** `ease-out`
+- **Direção:** Direita (avançar), Esquerda (voltar)
+- **Fallback:** Se `prefers-reduced-motion: reduce`, transição instantânea (0ms)
 
 ### Para Progresso
 
@@ -234,10 +352,20 @@ Substituir o layout de dois painéis (input à esquerda, resultado à direita) p
 
 ### Card de Seleção (Radio Card)
 
+**Interação:**
+- Clique em qualquer área do card seleciona a opção
+- Hover: elevação sutil (`box-shadow`) ou mudança de borda
+- Seleção: borda accent + background diferenciado
+
 ```css
 /* Estado não selecionado */
 border: 1px solid var(--border);
 background: var(--bg-secondary);
+cursor: pointer;
+
+/* Estado hover */
+border-color: var(--text-secondary);
+box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 
 /* Estado selecionado */
 border: 2px solid var(--accent);
@@ -265,7 +393,9 @@ background: var(--border);
 
 ---
 
-## Mudanças em Arquivos Existentes
+## Mudanças em Arquivos
+
+> **Nota:** Os arquivos referenciados abaixo serão criados conforme o design de web-ui-migration (docs/superpowers/specs/2026-03-15-web-ui-migration-design.md). Este spec altera o layout desses arquivos de "dois painéis" para "wizard full-screen cards".
 
 ### `server/static/index.html`
 
