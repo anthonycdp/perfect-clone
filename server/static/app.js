@@ -403,3 +403,76 @@ const App = {
 
         this.switchTab('prompt');
     },
+
+    // Tabs
+    switchTab(tabName) {
+        document.querySelectorAll('.tab').forEach(t => {
+            const isActive = t.dataset.tab === tabName;
+            t.classList.toggle('active', isActive);
+            t.setAttribute('aria-selected', isActive);
+        });
+
+        document.querySelectorAll('.tab-content').forEach(c => {
+            c.classList.toggle('hidden', c.dataset.content !== tabName);
+            c.classList.toggle('active', c.dataset.content === tabName);
+        });
+    },
+
+    // Utilities
+    async copyPrompt() {
+        const text = document.getElementById('prompt-text').textContent;
+        await navigator.clipboard.writeText(text);
+        this.showToast('Copiado!', 'success');
+    },
+
+    showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        toast.setAttribute('role', 'alert');
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'slideIn 0.3s ease reverse';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+
+    // Theme
+    toggleTheme() {
+        const html = document.documentElement;
+        const current = html.dataset.theme;
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.dataset.theme = next;
+        localStorage.setItem('theme', next);
+    },
+
+    loadTheme() {
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.dataset.theme = saved;
+    },
+
+    // Keyboard Navigation
+    initKeyboardNav() {
+        document.addEventListener('keydown', (e) => {
+            // Escape to cancel extraction
+            if (e.key === 'Escape' && this.state.isExtracting) {
+                this.cancelExtraction();
+            }
+
+            // Enter to advance in input fields
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                const step = document.querySelector(`.wizard-step[data-step="${this.state.currentStep}"]`);
+                if (step && !step.classList.contains('hidden')) {
+                    const nextBtn = step.querySelector('.btn-primary');
+                    if (nextBtn && document.activeElement.tagName !== 'BUTTON') {
+                        nextBtn.click();
+                    }
+                }
+            }
+        });
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
