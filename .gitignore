@@ -41,5 +41,9 @@ ENV/
 .coverage
 htmlcov/
 
-# Serena
-.serena/
+# AI Tools
+.serena
+.superpowers
+CLAUDE.md
+AGENTS.md
+
