@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Component Extractor</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <header>
+        <h1>Component Extractor</h1>
+        <button id="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">◐</button>
+    </header>
+
+    <main class="wizard-container">
+        <div class="wizard-card">
+            <!-- Step 1: URL -->
+            <div class="wizard-step" data-step="1" aria-label="Passo 1 de 4">
+                <span class="step-indicator">1 de 4</span>
+                <h2 class="step-title">Qual site voce quer extrair?</h2>
+                <div class="form-group">
+                    <input type="url" id="url" placeholder="https://exemplo.com" aria-label="URL do site">
+                    <span class="error-message" id="url-error"></span>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-primary" id="btn-next-1">Continuar</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Mode -->
+            <div class="wizard-step hidden" data-step="2" aria-label="Passo 2 de 4">
+                <span class="step-indicator">2 de 4</span>
+                <h2 class="step-title">O que voce quer extrair?</h2>
+                <div class="radio-cards" role="radiogroup" aria-label="Modo de extracao">
+                    <div class="radio-card selected" data-value="component" role="radio" aria-checked="true" tabindex="0">
+                        <div class="radio-card-header">
+                            <span class="radio-indicator"></span>
+                            <span class="radio-label">Componente unico</span>
+                        </div>
+                        <p class="radio-card-description">Um elemento especifico da pagina</p>
+                    </div>
+                    <div class="radio-card" data-value="full_page" role="radio" aria-checked="false" tabindex="0">
+                        <div class="radio-card-header">
+                            <span class="radio-indicator"></span>
+                            <span class="radio-label">Landing Page completa</span>
+                        </div>
+                        <p class="radio-card-description">Toda a pagina inicial</p>
+                    </div>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-back-2">Voltar</button>
+                    <button class="btn-primary" id="btn-next-2">Continuar</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Strategy -->
+            <div class="wizard-step hidden" data-step="3" aria-label="Passo 3 de 4">
+                <span class="step-indicator">3 de 4</span>
+                <h2 class="step-title">Como encontrar o componente?</h2>
+                <div class="radio-cards strategy-cards" role="radiogroup" aria-label="Estrategia de busca">
+                    <div class="radio-card" data-value="css" role="radio" aria-checked="false" tabindex="0">
+                        <span class="radio-label">CSS</span>
+                        <span class="radio-card-hint">Seletor CSS</span>
+                    </div>
+                    <div class="radio-card" data-value="xpath" role="radio" aria-checked="false" tabindex="0">
+                        <span class="radio-label">XPath</span>
+                        <span class="radio-card-hint">Expressao XPath</span>
+                    </div>
+                    <div class="radio-card selected" data-value="text" role="radio" aria-checked="true" tabindex="0">
+                        <span class="radio-label">Texto</span>
+                        <span class="radio-card-hint">Buscar por texto visivel</span>
+                    </div>
+                    <div class="radio-card" data-value="html_snippet" role="radio" aria-checked="false" tabindex="0">
+                        <span class="radio-label">HTML</span>
+                        <span class="radio-card-hint">Trecho de HTML</span>
+                    </div>
+                </div>
+                <p class="strategy-description" id="strategy-description">Buscar por texto visivel na pagina</p>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-back-3">Voltar</button>
+                    <button class="btn-primary" id="btn-next-3">Continuar</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Query + Execute -->
+            <div class="wizard-step hidden" data-step="4" aria-label="Passo 4 de 4">
+                <span class="step-indicator">4 de 4</span>
+                <h2 class="step-title">O que voce quer buscar?</h2>
+                <div class="form-group">
+                    <textarea id="query" rows="3" placeholder="Digite o texto do botao, titulo ou elemento..." aria-label="Query de busca"></textarea>
+                    <span class="error-message" id="query-error"></span>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-back-4">Voltar</button>
+                    <button class="btn-primary" id="btn-extract">Extrair</button>
+                </div>
+            </div>
+
+            <!-- Progress State -->
+            <div class="wizard-step hidden" data-state="progress" aria-label="Extraindo">
+                <h2 class="step-title centered">Extraindo...</h2>
+                <div class="progress-container">
+                    <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <span class="progress-percent">0%</span>
+                </div>
+                <p class="progress-message" id="progress-message">Preparando...</p>
+                <div class="wizard-actions centered">
+                    <button class="btn-danger" id="btn-cancel">Cancelar</button>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div class="wizard-step hidden" data-state="error" aria-label="Erro">
+                <div class="error-icon">!</div>
+                <h2 class="step-title centered">Erro</h2>
+                <p class="error-text" id="error-text"></p>
+                <div class="wizard-actions centered">
+                    <button class="btn-secondary" id="btn-back-error">Voltar</button>
+                    <button class="btn-primary" id="btn-retry">Tentar Novamente</button>
+                </div>
+            </div>
+
+            <!-- Result State -->
+            <div class="wizard-step hidden" data-state="result">
+                <div class="result-header">
+                    <span class="success-icon">ok</span>
+                    <h2 class="step-title">Extracao concluida!</h2>
+                </div>
+                <div class="tabs">
+                    <button class="tab active" data-tab="prompt" aria-selected="true">Prompt</button>
+                    <button class="tab" data-tab="json" aria-selected="false">JSON</button>
+                    <button class="tab" data-tab="assets" aria-selected="false">Assets</button>
+                </div>
+                <div class="tab-content active" data-content="prompt">
+                    <div class="screenshot-preview hidden" id="screenshot-container">
+                        <img id="screenshot-img" src="" alt="Screenshot do componente">
+                    </div>
+                    <div class="prompt-container">
+                        <pre id="prompt-text"></pre>
+                        <button class="btn-copy" id="btn-copy-prompt" aria-label="Copiar prompt">Copiar</button>
+                    </div>
+                </div>
+                <div class="tab-content hidden" data-content="json">
+                    <pre id="json-text"></pre>
+                </div>
+                <div class="tab-content hidden" data-content="assets">
+                    <ul id="assets-list"></ul>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-new-extraction">Nova Extracao</button>
+                </div>
+            </div>
+
+            <!-- Progress Dots -->
+            <div class="wizard-dots" aria-label="Progresso do wizard">
+                <span class="dot active" data-dot="1" aria-label="Passo 1" aria-current="step"></span>
+                <span class="dot" data-dot="2" aria-label="Passo 2"></span>
+                <span class="dot" data-dot="3" aria-label="Passo 3"></span>
+                <span class="dot" data-dot="4" aria-label="Passo 4"></span>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast-container" aria-live="polite"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
