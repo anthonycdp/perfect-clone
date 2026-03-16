@@ -1,20 +1,29 @@
-"""Component Extractor - Extract web components and generate recreation prompts."""
+"""Component Extractor - Web UI Entry Point."""
 
-import os
-import tkinter as tk
+import threading
+import webbrowser
+
+import uvicorn
 from dotenv import load_dotenv
-from gui.app import ComponentExtractorApp
+
+from server.app import app
 
 
 def main():
     """Start the application."""
-    # Load environment variables
     load_dotenv()
 
-    # Create and run the GUI
-    root = tk.Tk()
-    app = ComponentExtractorApp(root)
-    root.mainloop()
+    host = "127.0.0.1"
+    port = 8000
+
+    # Open browser after short delay (let server start first)
+    threading.Timer(
+        1.0,
+        lambda: webbrowser.open(f"http://{host}:{port}"),
+    ).start()
+
+    print(f"Starting Component Extractor at http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":
