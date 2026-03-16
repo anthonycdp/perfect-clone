@@ -18,6 +18,8 @@ component-extractor/
 ├── server/                    # NEW
 │   ├── __init__.py            # NEW
 │   ├── app.py                 # NEW: FastAPI app, routes, SSE
+│   ├── task.py                # NEW: ExtractionTask class
+│   ├── runner.py              # NEW: async extraction runner
 │   └── static/                # NEW
 │       ├── index.html         # NEW
 │       ├── styles.css         # NEW
@@ -38,10 +40,15 @@ component-extractor/
 │   ├── responsive_collector.py # MODIFIED
 │   ├── rich_media_collector.py # MODIFIED
 │   └── extraction_scope.py    # MODIFIED
+├── tests/
+│   └── server/                # NEW: server tests
+│       └── test_task.py       # NEW
 ├── gui/                       # DELETE after migration
 │   └── ...
 └── worker.py                  # DELETE after migration
 ```
+
+> **Note:** The orchestrator saves screenshots to `output/screenshots/` (not `assets/images/`). The total progress steps are 12 (steps 0-11).
 
 ---
 
@@ -224,7 +231,14 @@ class ExtractionTask:
         self.cancelled = True
 ```
 
-- [ ] **Step 3: Write test for ExtractionTask**
+- [ ] **Step 3: Create tests/server directory**
+
+```bash
+mkdir -p tests/server
+touch tests/server/__init__.py
+```
+
+- [ ] **Step 4: Write test for ExtractionTask**
 
 Create: `tests/server/test_task.py`
 
@@ -424,20 +438,21 @@ async def run_extraction(task: ExtractionTask):
             )
             return
 
-        async def progress_callback(step: int, step_name: str, message: str):
-            await task.emit_progress(step, step_name, message)
+        # Progress callback wrapper (sync, orchestrator calls it directly)
+        def progress_callback(step: int, step_name: str, message: str):
+            # Queue the async emit as a task
+            import asyncio
+            asyncio.create_task(task.emit_progress(step, step_name, message))
 
-        orchestrator = ExtractionOrchestrator(
-            api_key=api_key,
-            progress_callback=progress_callback,
-            cancel_check=task.check_cancelled,
-        )
+        orchestrator = ExtractionOrchestrator(api_key=api_key)
 
         synthesis = await orchestrator.extract(
             url=task.request.url,
-            mode=task.request.mode,
+            extraction_mode=task.request.mode,  # Note: orchestrator uses extraction_mode param
             strategy=task.request.strategy,
             query=task.request.query,
+            progress_callback=progress_callback,
+            cancel_check=task.check_cancelled,
         )
 
         normalized = orchestrator.last_normalized_output
@@ -1478,52 +1493,297 @@ git commit -m "refactor: migrate TargetFinder to async API"
 
 ---
 
-### Task 4.2: Migrate Remaining Collectors
+### Task 4.2: Migrate DOMExtractor to Async
 
-Apply the same pattern to each collector module:
-
-**Files to modify:**
-- `collector/dom_extractor.py`
-- `collector/style_extractor.py`
-- `collector/interaction_mapper.py`
-- `collector/interaction_player.py`
-- `collector/animation_recorder.py`
-- `collector/asset_downloader.py`
-- `collector/library_detector.py`
-- `collector/responsive_collector.py`
-- `collector/rich_media_collector.py`
-- `collector/extraction_scope.py`
-
-**Pattern for each:**
+**Files:**
+- Modify: `collector/dom_extractor.py`
+- Modify: `tests/collector/test_dom_extractor.py`
 
 - [ ] **Step 1: Update imports**
+
+Change:
 ```python
-from playwright.sync_api import ...  # remove
-from playwright.async_api import ...  # add
+from playwright.sync_api import Page, Locator
 ```
 
-- [ ] **Step 2: Add async to methods**
+To:
 ```python
-async def method_name(self, ...):
+from playwright.async_api import Page, Locator
 ```
 
-- [ ] **Step 3: Add await to Playwright calls**
-```python
-result = await self.page.evaluate(...)
-element = await locator.something()
-```
+- [ ] **Step 2: Add async/await to all methods**
 
-- [ ] **Step 4: Update corresponding tests**
+Add `async` to method definitions and `await` to Playwright calls:
+- `extract()` → `async def extract()`
+- `extract_page()` → `async def extract_page()`
+- All `self.page.evaluate()` → `await self.page.evaluate()`
+- All `locator.*` calls → `await locator.*`
 
-- [ ] **Step 5: Commit each module**
+- [ ] **Step 3: Update tests for async**
+
+Add `@pytest.mark.asyncio` and use `await` in test calls.
+
+- [ ] **Step 4: Run tests**
+
+Run: `pytest tests/collector/test_dom_extractor.py -v`
+Expected: All tests pass
+
+- [ ] **Step 5: Commit**
+
 ```bash
-git add collector/<module>.py tests/collector/test_<module>.py
-git commit -m "refactor: migrate <module> to async API"
+git add collector/dom_extractor.py tests/collector/test_dom_extractor.py
+git commit -m "refactor: migrate DOMExtractor to async API"
 ```
 
 ---
 
-### Task 4.3: Update Collector __init__.py
+### Task 4.3: Migrate StyleExtractor to Async
+
+**Files:**
+- Modify: `collector/style_extractor.py`
+- Modify: `tests/collector/test_style_extractor.py`
+
+- [ ] **Step 1: Update imports**
+
+Change `sync_api` to `async_api` in imports.
+
+- [ ] **Step 2: Add async/await to all methods**
+
+- `extract()` → `async def extract()`
+- `extract_page()` → `async def extract_page()`
+- All Playwright calls need `await`
+
+- [ ] **Step 3: Update tests for async**
+
+- [ ] **Step 4: Run tests**
+
+Run: `pytest tests/collector/test_style_extractor.py -v`
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add collector/style_extractor.py tests/collector/test_style_extractor.py
+git commit -m "refactor: migrate StyleExtractor to async API"
+```
+
+---
+
+### Task 4.4: Migrate InteractionMapper to Async
+
+**Files:**
+- Modify: `collector/interaction_mapper.py`
+- Modify: `tests/collector/test_interaction_mapper.py`
+
+- [ ] **Step 1: Update imports**
+
+Change `sync_api` to `async_api`.
+
+- [ ] **Step 2: Add async/await to all methods**
+
+- `map()` → `async def map()`
+- All Playwright calls need `await`
+
+- [ ] **Step 3: Update tests**
+
+Run: `pytest tests/collector/test_interaction_mapper.py -v`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add collector/interaction_mapper.py tests/collector/test_interaction_mapper.py
+git commit -m "refactor: migrate InteractionMapper to async API"
+```
+
+---
+
+### Task 4.5: Migrate InteractionPlayer to Async
+
+**Files:**
+- Modify: `collector/interaction_player.py`
+- Modify: `tests/collector/test_interaction_player.py`
+
+- [ ] **Step 1: Update imports**
+
+- [ ] **Step 2: Add async/await**
+
+- `play_all()` → `async def play_all()`
+- All Playwright calls need `await`
+
+- [ ] **Step 3: Update tests and run**
+
+Run: `pytest tests/collector/test_interaction_player.py -v`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add collector/interaction_player.py tests/collector/test_interaction_player.py
+git commit -m "refactor: migrate InteractionPlayer to async API"
+```
+
+---
+
+### Task 4.6: Migrate AnimationRecorder to Async
+
+**Files:**
+- Modify: `collector/animation_recorder.py`
+- Modify: `tests/collector/test_animation_recorder.py`
+
+- [ ] **Step 1: Update imports**
+
+- [ ] **Step 2: Add async/await**
+
+- `record()` → `async def record()`
+- All Playwright calls need `await`
+
+- [ ] **Step 3: Update tests and run**
+
+Run: `pytest tests/collector/test_animation_recorder.py -v`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add collector/animation_recorder.py tests/collector/test_animation_recorder.py
+git commit -m "refactor: migrate AnimationRecorder to async API"
+```
+
+---
+
+### Task 4.7: Migrate AssetDownloader to Async
+
+**Files:**
+- Modify: `collector/asset_downloader.py`
+- Modify: `tests/collector/test_asset_downloader.py`
+
+- [ ] **Step 1: Update imports**
+
+Change `sync_api` to `async_api`. Also use `aiohttp` for async HTTP downloads:
+
+```python
+import aiohttp
+```
+
+- [ ] **Step 2: Add async/await**
+
+- `download_all()` → `async def download_all()`
+- `download_asset()` → `async def download_asset()`
+- Use `aiohttp.ClientSession()` for downloads instead of `requests` or `httpx`
+
+- [ ] **Step 3: Update tests and run**
+
+Run: `pytest tests/collector/test_asset_downloader.py -v`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add collector/asset_downloader.py tests/collector/test_asset_downloader.py
+git commit -m "refactor: migrate AssetDownloader to async API"
+```
+
+---
+
+### Task 4.8: Migrate LibraryDetector to Async
+
+**Files:**
+- Modify: `collector/library_detector.py`
+- Modify: `tests/collector/test_library_detector.py`
+
+- [ ] **Step 1: Update imports**
+
+- [ ] **Step 2: Add async/await**
+
+- `detect()` → `async def detect()`
+- All Playwright calls need `await`
+
+- [ ] **Step 3: Update tests and run**
+
+Run: `pytest tests/collector/test_library_detector.py -v`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add collector/library_detector.py tests/collector/test_library_detector.py
+git commit -m "refactor: migrate LibraryDetector to async API"
+```
+
+---
+
+### Task 4.9: Migrate ResponsiveCollector to Async
+
+**Files:**
+- Modify: `collector/responsive_collector.py`
+- Modify: `tests/collector/test_responsive_collector.py`
+
+- [ ] **Step 1: Update imports**
+
+- [ ] **Step 2: Add async/await**
+
+- `collect_all()` → `async def collect_all()`
+- `detect_breakpoints()` → `async def detect_breakpoints()`
+- `collect_at_viewport()` → `async def collect_at_viewport()`
+- All Playwright calls need `await`
+
+- [ ] **Step 3: Update tests and run**
+
+Run: `pytest tests/collector/test_responsive_collector.py -v`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add collector/responsive_collector.py tests/collector/test_responsive_collector.py
+git commit -m "refactor: migrate ResponsiveCollector to async API"
+```
+
+---
+
+### Task 4.10: Migrate RichMediaCollector to Async
+
+**Files:**
+- Modify: `collector/rich_media_collector.py`
+- Modify: `tests/collector/test_rich_media_collector.py`
+
+- [ ] **Step 1: Update imports**
+
+- [ ] **Step 2: Add async/await**
+
+- `collect()` → `async def collect()`
+- All Playwright calls need `await`
+
+- [ ] **Step 3: Update tests and run**
+
+Run: `pytest tests/collector/test_rich_media_collector.py -v`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add collector/rich_media_collector.py tests/collector/test_rich_media_collector.py
+git commit -m "refactor: migrate RichMediaCollector to async API"
+```
+
+---
+
+### Task 4.11: Migrate ExtractionScope to Async
+
+**Files:**
+- Modify: `collector/extraction_scope.py`
+
+- [ ] **Step 1: Update imports**
+
+Change `sync_api` to `async_api` if any imports exist.
+
+- [ ] **Step 2: Review for any sync methods**
+
+The `ExtractionScope` dataclass may not need async changes if it only stores data. Verify no Playwright sync calls exist.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add collector/extraction_scope.py
+git commit -m "refactor: update ExtractionScope imports for async API"
+```
+
+---
+
+### Task 4.12: Update Collector __init__.py
 
 **Files:**
 - Modify: `collector/__init__.py`
@@ -1657,27 +1917,42 @@ git commit -m "chore: remove Tkinter GUI and threading worker"
 - [ ] **Step 1: Start the application**
 
 Run: `python main.py`
-Expected: Server starts, browser opens automatically
+Expected: Server starts, browser opens automatically at http://127.0.0.1:8000
 
-- [ ] **Step 2: Test extraction**
+- [ ] **Step 2: Test successful extraction**
 
 1. Enter URL: `https://example.com`
 2. Select mode: Component
 3. Select strategy: Text
 4. Enter query: `Example Domain`
 5. Click Extract
-6. Verify progress updates appear
-7. Verify result appears with prompt
-8. Test Copy button
-9. Test theme toggle
-10. Test tab switching
+6. Verify progress updates appear in real-time
+7. Verify result appears with prompt text
+8. Verify screenshot preview shows (if available)
+9. Test Copy button - should show "Copied!" toast
+10. Test theme toggle - should switch between dark/light
+11. Test tab switching (Prompt, JSON, Assets)
 
-- [ ] **Step 3: Run all tests**
+- [ ] **Step 3: Test error handling**
+
+1. Enter invalid URL: `not-a-url`
+2. Click Extract
+3. Verify error toast appears
+4. Verify button state resets
+
+- [ ] **Step 4: Test cancellation**
+
+1. Enter a slow-loading URL (or any URL)
+2. Click Extract
+3. While extracting, verify the button shows "Extracting..."
+4. (Cancel endpoint is available, but UI may not have cancel button - verify endpoint works via API test)
+
+- [ ] **Step 5: Run all unit tests**
 
 Run: `pytest -v`
 Expected: All tests pass
 
-- [ ] **Step 4: Final commit**
+- [ ] **Step 6: Final commit**
 
 ```bash
 git add -A
@@ -1690,11 +1965,11 @@ git commit -m "feat: complete Web UI migration"
 
 | Chunk | Description | Key Files |
 |-------|-------------|-----------|
-| 1 | Backend Foundation | `models/requests.py`, `server/app.py`, `server/task.py` |
+| 1 | Backend Foundation | `models/requests.py`, `server/app.py`, `server/task.py`, `server/runner.py` |
 | 2 | Frontend | `server/static/index.html`, `styles.css`, `app.js` |
 | 3 | Orchestrator Async | `orchestrator.py`, `collector/browser.py` |
-| 4 | Collectors Async | All `collector/*.py` files |
+| 4 | Collectors Async (10 tasks) | All `collector/*.py` files |
 | 5 | Entry Point & Cleanup | `main.py`, remove `gui/`, `worker.py` |
 
-**Total Tasks:** 14
-**Estimated Steps:** ~50
+**Total Tasks:** 24 (Task 1.1-1.4, 2.1-2.3, 3.1-3.2, 4.1-4.12, 5.1-5.3)
+**Estimated Steps:** ~80
