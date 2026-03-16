@@ -298,7 +298,8 @@ Quando reduzido, todas as transições são instantâneas (sem animação).
 ### Tablet (768px - 1024px)
 
 - Card centralizado com max-width de 500px
-- Cards de seleção (passo 2) em grid 2x2
+- Cards de seleção (passo 3 - estratégias) em grid 2x2
+- Cards de seleção (passo 2 - modo) empilham verticalmente
 - Layout híbrido entre desktop e mobile
 
 ### Mobile (< 768px)
