@@ -155,3 +155,101 @@ const App = {
             dot.setAttribute('aria-current', isActive ? 'step' : 'false');
         });
     },
+
+    // Validation
+    validateCurrentStep() {
+        switch (this.state.currentStep) {
+            case 1: return this.validateUrl();
+            case 2: return true;
+            case 3: return true;
+            case 4: return this.validateQuery();
+            default: return true;
+        }
+    },
+
+    validateUrl() {
+        const url = document.getElementById('url').value.trim();
+        const errorEl = document.getElementById('url-error');
+
+        if (!url) {
+            errorEl.textContent = 'Por favor, informe uma URL';
+            return false;
+        }
+
+        try {
+            const parsed = new URL(url);
+            if (!['http:', 'https:'].includes(parsed.protocol)) {
+                errorEl.textContent = 'Por favor, informe uma URL valida (http:// ou https://)';
+                return false;
+            }
+        } catch {
+            errorEl.textContent = 'Por favor, informe uma URL valida (http:// ou https://)';
+            return false;
+        }
+
+        errorEl.textContent = '';
+        return true;
+    },
+
+    validateQuery() {
+        const query = document.getElementById('query').value.trim();
+        const errorEl = document.getElementById('query-error');
+
+        if (!query) {
+            errorEl.textContent = 'Por favor, informe o que deseja buscar';
+            return false;
+        }
+
+        errorEl.textContent = '';
+        return true;
+    },
+
+    // Form Data
+    saveCurrentStepData() {
+        switch (this.state.currentStep) {
+            case 1:
+                this.state.url = document.getElementById('url').value.trim();
+                break;
+            case 4:
+                this.state.query = document.getElementById('query').value.trim();
+                break;
+        }
+    },
+
+    selectRadioCard(card, type) {
+        const container = card.closest('.radio-cards');
+        container.querySelectorAll('.radio-card').forEach(c => {
+            c.classList.remove('selected');
+            c.setAttribute('aria-checked', 'false');
+        });
+
+        card.classList.add('selected');
+        card.setAttribute('aria-checked', 'true');
+
+        if (type === 'mode') {
+            this.state.mode = card.dataset.value;
+        } else if (type === 'strategy') {
+            this.state.strategy = card.dataset.value;
+            this.updateStrategyDescription();
+        }
+    },
+
+    updateStrategyDescription() {
+        const descriptions = {
+            css: 'Buscar por seletor CSS',
+            xpath: 'Buscar por expressao XPath',
+            text: 'Buscar por texto visivel na pagina',
+            html_snippet: 'Buscar por trecho de HTML'
+        };
+        document.getElementById('strategy-description').textContent = descriptions[this.state.strategy];
+    },
+
+    updateQueryPlaceholder() {
+        const placeholders = {
+            css: 'Digite o seletor CSS (ex: .btn-primary)',
+            xpath: 'Digite a expressao XPath',
+            text: 'Digite o texto do botao, titulo ou elemento...',
+            html_snippet: 'Cole o trecho HTML do elemento'
+        };
+        document.getElementById('query').placeholder = placeholders[this.state.strategy];
+    },
