@@ -1968,7 +1968,7 @@ git commit -m "feat: complete Web UI migration"
 | 1 | Backend Foundation | `models/requests.py`, `server/app.py`, `server/task.py`, `server/runner.py` |
 | 2 | Frontend | `server/static/index.html`, `styles.css`, `app.js` |
 | 3 | Orchestrator Async | `orchestrator.py`, `collector/browser.py` |
-| 4 | Collectors Async (10 tasks) | All `collector/*.py` files |
+| 4 | Collectors Async (12 tasks) | All `collector/*.py` files |
 | 5 | Entry Point & Cleanup | `main.py`, remove `gui/`, `worker.py` |
 
 **Total Tasks:** 24 (Task 1.1-1.4, 2.1-2.3, 3.1-3.2, 4.1-4.12, 5.1-5.3)
