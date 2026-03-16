@@ -2,12 +2,16 @@
 
 from models.extraction import BoundingBox, Asset, ExternalLibrary, ExtractionMode
 from models.normalized import (
+    AnimationSummary,
     FullPageNormalizedOutput,
+    InteractionSummary,
     RichMediaCapture,
     NormalizedOutput,
     PageInfo,
     PageCaptureInfo,
     PageSectionSummary,
+    ScrollProbeStateChange,
+    ScrollProbeSummary,
     TargetInfo,
     InteractionSummary,
     ResponsiveBehavior,
@@ -52,38 +56,8 @@ class ContextBuilder:
         # Transform styles
         style_summary = self.style_transformer.transform(styles_data)
 
-        # Build interaction summary - extract selectors from element dicts
-        interaction_summary = InteractionSummary(
-            hoverable_elements=[
-                el.get("selector", "") if isinstance(el, dict) else el
-                for el in interactions_data.get("hoverable", [])
-            ],
-            clickable_elements=[
-                el.get("selector", "") if isinstance(el, dict) else el
-                for el in interactions_data.get("clickable", [])
-            ],
-            focusable_elements=[
-                el.get("selector", "") if isinstance(el, dict) else el
-                for el in interactions_data.get("focusable", [])
-            ],
-            scroll_containers=[
-                el.get("selector", "") if isinstance(el, dict) else el
-                for el in interactions_data.get("scroll_containers", [])
-            ],
-            observed_states={
-                state.get("selector", f"state_{i}"): state
-                for i, state in enumerate(interactions_data.get("observed_states", []))
-                if isinstance(state, dict)
-            },
-        )
-
-        # Transform animations
-        animation_summary = self.animation_transformer.transform(
-            animations_data.get("animations", []),
-            animations_data.get("transitions", []),
-            animations_data.get("keyframes", {}),
-            animations_data.get("recording"),
-        )
+        interaction_summary = self._build_interaction_summary(interactions_data)
+        animation_summary = self._build_animation_summary(animations_data)
 
         # Build responsive behavior
         responsive_behavior = ResponsiveBehavior(
@@ -98,17 +72,7 @@ class ContextBuilder:
 
         # Build libraries
         libraries = [ExternalLibrary(**lib) for lib in libraries_data]
-        rich_media = [
-            RichMediaCapture(
-                **{
-                    **entry,
-                    "bounding_box": self._build_bounding_box(
-                        entry.get("bounding_box", {})
-                    ),
-                }
-            )
-            for entry in rich_media_data
-        ]
+        rich_media = self._build_rich_media_captures(rich_media_data)
 
         common_fields = {
             "page": page_info,
@@ -168,6 +132,7 @@ class ContextBuilder:
         """Build normalized output for a full-page extraction."""
         sections = [
             PageSectionSummary(
+                section_id=section.get("section_id", ""),
                 name=section.get("name", ""),
                 selector=section.get("selector", ""),
                 tag=section.get("tag", "section"),
@@ -175,6 +140,18 @@ class ContextBuilder:
                 bounding_box=self._build_bounding_box(
                     section.get("bounding_box", {})
                 ),
+                html=section.get("html", ""),
+                screenshot_path=section.get("screenshot_path"),
+                interactions=self._build_interaction_summary(section.get("interactions"))
+                if section.get("interactions")
+                else None,
+                animations=self._build_animation_summary(section.get("animations"))
+                if section.get("animations")
+                else None,
+                rich_media=self._build_rich_media_captures(
+                    section.get("rich_media", [])
+                ),
+                collection_limitations=section.get("collection_limitations", []),
             )
             for section in page_capture_data.get("sections", [])
         ]
@@ -201,4 +178,106 @@ class ContextBuilder:
             y=box_data.get("y", 0),
             width=box_data.get("width", 0),
             height=box_data.get("height", 0),
+        )
+
+    def _build_interaction_summary(
+        self,
+        interactions_data: dict | None,
+    ) -> InteractionSummary:
+        """Build an interaction summary from raw collector output."""
+        interactions_data = interactions_data or {}
+        return InteractionSummary(
+            hoverable_elements=[
+                el.get("selector", "") if isinstance(el, dict) else el
+                for el in interactions_data.get("hoverable", [])
+            ],
+            clickable_elements=[
+                el.get("selector", "") if isinstance(el, dict) else el
+                for el in interactions_data.get("clickable", [])
+            ],
+            focusable_elements=[
+                el.get("selector", "") if isinstance(el, dict) else el
+                for el in interactions_data.get("focusable", [])
+            ],
+            scroll_containers=[
+                el.get("selector", "") if isinstance(el, dict) else el
+                for el in interactions_data.get("scroll_containers", [])
+            ],
+            observed_states={
+                state.get("selector", f"state_{index}"): state
+                for index, state in enumerate(
+                    interactions_data.get("observed_states", [])
+                )
+                if isinstance(state, dict)
+            },
+        )
+
+    def _build_animation_summary(
+        self,
+        animations_data: dict | None,
+    ) -> AnimationSummary:
+        """Build a normalized animation summary from raw collector output."""
+        animations_data = animations_data or {}
+        return self.animation_transformer.transform(
+            animations_data.get("animations", []),
+            animations_data.get("transitions", []),
+            animations_data.get("keyframes", {}),
+            animations_data.get("observed_scroll_effects", []),
+            animations_data.get("recording"),
+            self._build_scroll_probe_summary(animations_data.get("scroll_probe")),
+        )
+
+    def _build_rich_media_captures(
+        self,
+        rich_media_data: list[dict] | None,
+    ) -> list[RichMediaCapture]:
+        """Build normalized rich-media captures from raw collector output."""
+        return [
+            RichMediaCapture(
+                **{
+                    **entry,
+                    "bounding_box": self._build_bounding_box(
+                        entry.get("bounding_box", {})
+                    ),
+                }
+            )
+            for entry in rich_media_data or []
+        ]
+
+    def _build_scroll_probe_summary(
+        self,
+        scroll_probe_data: dict | None,
+    ) -> ScrollProbeSummary | None:
+        """Build a normalized scroll probe summary when probe data exists."""
+        if not scroll_probe_data:
+            return None
+        if hasattr(scroll_probe_data, "model_dump"):
+            scroll_probe_data = scroll_probe_data.model_dump(mode="json")
+
+        state_changes = [
+            ScrollProbeStateChange(
+                selector=entry.get("selector", ""),
+                property_changes=entry.get("property_changes", {}),
+                first_changed_step=entry.get("first_changed_step", 0),
+                peak_changed_step=entry.get("peak_changed_step", 0),
+                notes=entry.get("notes", []),
+            )
+            for entry in scroll_probe_data.get("state_changes", [])
+        ]
+
+        return ScrollProbeSummary(
+            context=scroll_probe_data.get("context", "page"),
+            triggered=scroll_probe_data.get("triggered", False),
+            range_start=scroll_probe_data.get("range_start", 0),
+            range_end=scroll_probe_data.get("range_end", 0),
+            step_count=scroll_probe_data.get("step_count", 0),
+            fps=scroll_probe_data.get("fps", 0),
+            frames_dir=scroll_probe_data.get("frames_dir"),
+            video_path=scroll_probe_data.get("video_path"),
+            key_frames=scroll_probe_data.get("key_frames", []),
+            tracked_selectors=scroll_probe_data.get("tracked_selectors", []),
+            overlay_selectors=scroll_probe_data.get("overlay_selectors", []),
+            observations=scroll_probe_data.get("observations", []),
+            state_changes=state_changes,
+            limitations=scroll_probe_data.get("limitations", []),
         )

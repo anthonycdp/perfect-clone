@@ -3,23 +3,25 @@
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page
+from playwright.async_api import Page
 
+from collector.extraction_scope import ExtractionScope
 from collector.rich_media_collector import RichMediaCollector
 from models.extraction import RichMediaType
+
+pytestmark = pytest.mark.asyncio
 
 
 class TestRichMediaCollector:
     """Test suite for RichMediaCollector."""
 
-    def test_collect_video_metadata_and_snapshot(
+    async def test_collect_video_metadata_and_snapshot(
         self,
         page: Page,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Video capture should keep sources, poster, flags, and a snapshot path."""
-        page.set_content(
+        await page.set_content(
             """
             <html><body>
                 <video
@@ -35,13 +37,15 @@ class TestRichMediaCollector:
         )
 
         collector = RichMediaCollector(page, str(tmp_path))
+        async def fake_capture(_element, _media_type, _index):
+            return str(tmp_path / "video.png")
         monkeypatch.setattr(
             collector,
             "_capture_element_screenshot",
-            lambda _element, _media_type, _index: str(tmp_path / "video.png"),
+            fake_capture,
         )
 
-        captures = collector.collect(page.locator("body"))
+        captures = await collector.collect(page.locator("body"))
 
         assert len(captures) == 1
         assert captures[0].type == RichMediaType.VIDEO
@@ -51,13 +55,12 @@ class TestRichMediaCollector:
         assert captures[0].playback_flags["autoplay"] is True
         assert captures[0].snapshot_path == str(tmp_path / "video.png")
 
-    def test_collect_canvas_exports_png_snapshot(
+    async def test_collect_canvas_exports_png_snapshot(
         self,
         page: Page,
         tmp_path: Path,
     ) -> None:
-        """Canvas capture should prefer direct PNG export when available."""
-        page.set_content(
+        await page.set_content(
             """
             <html>
               <body>
@@ -72,8 +75,7 @@ class TestRichMediaCollector:
             """
         )
 
-        collector = RichMediaCollector(page, str(tmp_path))
-        captures = collector.collect(page.locator("body"))
+        captures = await RichMediaCollector(page, str(tmp_path)).collect(page.locator("body"))
 
         assert len(captures) == 1
         assert captures[0].type == RichMediaType.CANVAS
@@ -81,14 +83,13 @@ class TestRichMediaCollector:
         assert Path(captures[0].snapshot_path).exists()
         assert captures[0].limitations == []
 
-    def test_collect_canvas_falls_back_to_element_screenshot(
+    async def test_collect_canvas_falls_back_to_element_screenshot(
         self,
         page: Page,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Canvas capture should fall back to a screenshot when export is blocked."""
-        page.set_content(
+        await page.set_content(
             """
             <html>
               <body>
@@ -105,26 +106,27 @@ class TestRichMediaCollector:
 
         collector = RichMediaCollector(page, str(tmp_path))
         fallback_path = str(tmp_path / "fallback.png")
+        async def fake_capture(_element, _media_type, _index):
+            return fallback_path
         monkeypatch.setattr(
             collector,
             "_capture_element_screenshot",
-            lambda _element, _media_type, _index: fallback_path,
+            fake_capture,
         )
 
-        captures = collector.collect(page.locator("body"))
+        captures = await collector.collect(page.locator("body"))
 
         assert len(captures) == 1
         assert captures[0].snapshot_path == fallback_path
         assert any("fallback" in limitation.lower() for limitation in captures[0].limitations)
         assert collector.last_limitations
 
-    def test_collect_webgl_canvas_marks_webgl_type(
+    async def test_collect_webgl_canvas_marks_webgl_type(
         self,
         page: Page,
         tmp_path: Path,
     ) -> None:
-        """Canvas metadata should classify WebGL contexts separately."""
-        page.set_content(
+        await page.set_content(
             """
             <html>
               <body>
@@ -143,8 +145,76 @@ class TestRichMediaCollector:
             """
         )
 
-        collector = RichMediaCollector(page, str(tmp_path))
-        captures = collector.collect(page.locator("body"))
+        captures = await RichMediaCollector(page, str(tmp_path)).collect(page.locator("body"))
 
         assert len(captures) == 1
         assert captures[0].type == RichMediaType.WEBGL
+
+    async def test_collect_document_overlay_canvas_linked_to_target_runtime(
+        self,
+        page: Page,
+        tmp_path: Path,
+    ) -> None:
+        await page.set_content(
+            """
+            <html>
+              <body>
+                <section id="target">
+                  <div class="webgl-measure">
+                    <img class="webgl-img opacity-0" src="/image.webp" alt="Hero image" />
+                  </div>
+                </section>
+                <canvas
+                  id="overlay"
+                  width="120"
+                  height="120"
+                  style="position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none;"
+                ></canvas>
+                <script>
+                  HTMLCanvasElement.prototype.getContext = function(kind) {
+                    if (kind === 'webgl' || kind === 'webgl2' || kind === 'experimental-webgl') {
+                      return {};
+                    }
+                    return null;
+                  };
+
+                  const measures = document.querySelectorAll('.webgl-measure');
+                  const images = document.querySelectorAll('.webgl-img');
+                  const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#overlay') });
+                  function render() {
+                    const scrollY = window.scrollY;
+                    const columnsCount = 4;
+                    images.forEach(mesh => {
+                      mesh.position = mesh.position || {};
+                      mesh.position.y = scrollY * 0.2;
+                    });
+                    requestAnimationFrame(render);
+                  }
+                </script>
+              </body>
+            </html>
+            """
+        )
+
+        scope = ExtractionScope(
+            page=page,
+            frame=page.main_frame,
+            target=page.locator("#target"),
+            selector_used="#target",
+            strategy="css",
+            frame_url=page.url,
+            frame_name=None,
+            same_origin_accessible=True,
+            document_base_url=page.url,
+            within_shadow_dom=False,
+        )
+
+        collector = RichMediaCollector(page, str(tmp_path), scope=scope)
+        captures = await collector.collect(page.locator("#target"))
+
+        assert len(captures) == 1
+        assert captures[0].type == RichMediaType.WEBGL
+        assert captures[0].document_level is True
+        assert captures[0].linked_selectors == [".webgl-measure", ".webgl-img"]
+        assert captures[0].effect_summary is not None
+        assert "scroll velocity" in captures[0].effect_summary

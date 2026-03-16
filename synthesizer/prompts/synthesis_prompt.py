@@ -13,11 +13,13 @@ You will receive:
 - Computed styles organized by category
 - A screenshot of the extracted component or page when available
 - Animation and transition data (including recording)
+- A structured runtime scroll probe when scroll-linked effects were observed
 - Observed interactions (hover, click, scroll)
 - Responsive behavior
 - External libraries detected and how they're used
 - Assets (images, fonts, SVGs)
-- For full-page extractions, a section breakdown of the landing page
+- For full-page extractions, a section-by-section breakdown with screenshots, runtime motion evidence, and rich-media captures when available
+- The final deliverable will be bundled with a local package that contains prompt.txt, README.md, manifest.json, normalized.json, a primary screenshot when available, and supporting artifact folders
 
 Your output must be a structured JSON with:
 1. description: object with technical, visual, purpose
@@ -27,7 +29,9 @@ Your output must be a structured JSON with:
 5. dependencies: list of objects with name, reason, alternative (optional)
 6. recreation_prompt: string with the final optimized prompt
 
-The final prompt should be framework-agnostic, focus on pure HTML/CSS/JS, and contain enough detail to reproduce complex behaviors."""
+The final prompt should be framework-agnostic, focus on pure HTML/CSS/JS, and contain enough detail to reproduce complex behaviors.
+The recreation_prompt must explicitly instruct the next AI or developer to inspect the package files before coding.
+Do not claim that you directly inspected packaged files beyond the structured data and screenshot provided in this request."""
 
 
 def build_user_prompt(data: NormalizedOutput | FullPageNormalizedOutput) -> str:
@@ -41,6 +45,7 @@ def _build_component_prompt(data: NormalizedOutput) -> str:
     """Build the component-oriented prompt."""
     sections = [
         format_page_info(data),
+        format_package_context(),
         (
             "## Target Component\n"
             f"Selector: {data.target.selector_used}\n"
@@ -56,6 +61,7 @@ def _build_component_prompt(data: NormalizedOutput) -> str:
         _format_html_block("## HTML", data.target.html, limit=1_200),
         format_styles(data),
         format_animations(data),
+        format_scroll_probe(data),
         format_interactions(data),
         format_responsive(data),
         format_libraries(data),
@@ -69,6 +75,7 @@ def _build_full_page_prompt(data: FullPageNormalizedOutput) -> str:
     """Build the full-page prompt."""
     sections = [
         format_page_info(data),
+        format_package_context(),
         (
             "## Landing Page Capture\n"
             f"Scroll Completed: {data.page_capture.scroll_completed}\n"
@@ -80,6 +87,7 @@ def _build_full_page_prompt(data: FullPageNormalizedOutput) -> str:
         _format_html_block("## Page HTML", data.page_capture.html, limit=2_000),
         format_styles(data),
         format_animations(data),
+        format_scroll_probe(data),
         format_interactions(data),
         format_responsive(data),
         format_libraries(data),
@@ -100,6 +108,19 @@ def format_page_info(data: NormalizedOutput | FullPageNormalizedOutput) -> str:
     )
 
 
+def format_package_context() -> str:
+    """Describe the packaged files that will ship with the final prompt."""
+    return (
+        "## Package Context\n"
+        "The final delivery will include `prompt.txt`, `README.md`, `manifest.json`, "
+        "`normalized.json`, a primary screenshot when available, a `sections/` folder "
+        "with per-section artifacts, and supporting folders such as `assets/`, `rich_media/`, "
+        "`animations/`, and `animations/scroll_probe/`.\n"
+        "Write the recreation prompt so the next AI or developer inspects those files "
+        "before building."
+    )
+
+
 def format_page_sections(sections) -> str:
     """Format detected landing page sections."""
     if not sections:
@@ -108,9 +129,74 @@ def format_page_sections(sections) -> str:
     lines = ["## Sections"]
     for section in sections:
         lines.append(
-            f"- {section.name} [{section.tag}] via `{section.selector}` at "
-            f"{int(section.bounding_box.y)}px, excerpt: {section.text_excerpt or 'n/a'}"
+            f"### {section.section_id or section.name or 'section'}"
         )
+        lines.append(f"Name: {section.name}")
+        lines.append(f"Selector: `{section.selector}`")
+        lines.append(f"Tag: {section.tag}")
+        lines.append(f"Bounds: {section.bounding_box.model_dump(mode='json')}")
+        lines.append(f"Excerpt: {section.text_excerpt or 'n/a'}")
+        if section.screenshot_path:
+            lines.append(f"Screenshot: {section.screenshot_path}")
+        if section.html:
+            html_snippet = " ".join(section.html.split())[:500]
+            suffix = "..." if len(section.html) > 500 else ""
+            lines.append(f"HTML Snippet: `{html_snippet}{suffix}`")
+        if section.interactions:
+            interaction_bits: list[str] = []
+            if section.interactions.hoverable_elements:
+                interaction_bits.append(
+                    "hoverable="
+                    + ", ".join(section.interactions.hoverable_elements[:4])
+                )
+            if section.interactions.clickable_elements:
+                interaction_bits.append(
+                    "clickable="
+                    + ", ".join(section.interactions.clickable_elements[:4])
+                )
+            if section.interactions.scroll_containers:
+                interaction_bits.append(
+                    "scroll="
+                    + ", ".join(section.interactions.scroll_containers[:3])
+                )
+            if interaction_bits:
+                lines.append("Interactions: " + " | ".join(interaction_bits))
+        if section.animations:
+            if section.animations.scroll_effects:
+                lines.append(
+                    "Scroll Effects: " + " | ".join(section.animations.scroll_effects[:4])
+                )
+            if (
+                section.animations.scroll_probe
+                and section.animations.scroll_probe.observations
+            ):
+                lines.append(
+                    "Scroll Probe: "
+                    + " | ".join(section.animations.scroll_probe.observations[:3])
+                )
+            if (
+                section.animations.scroll_probe
+                and section.animations.scroll_probe.frames_dir
+            ):
+                lines.append(
+                    f"Scroll Probe Frames: {section.animations.scroll_probe.frames_dir}"
+                )
+            if (
+                section.animations.scroll_probe
+                and section.animations.scroll_probe.video_path
+            ):
+                lines.append(
+                    f"Scroll Probe Video: {section.animations.scroll_probe.video_path}"
+                )
+        if section.rich_media:
+            media_bits = []
+            for media in section.rich_media[:4]:
+                media_bits.append(f"{media.type.value} via `{media.selector}`")
+            lines.append("Rich Media: " + " | ".join(media_bits))
+        if section.collection_limitations:
+            lines.append(
+                "Limitations: " + " | ".join(section.collection_limitations[:3])
+            )
     return "\n".join(lines)
 
 
@@ -172,6 +258,64 @@ def format_animations(data: NormalizedOutput | FullPageNormalizedOutput) -> str:
 
     if len(lines) == 1:
         lines.append("No animations detected")
+
+    return "\n".join(lines)
+
+
+def format_scroll_probe(data: NormalizedOutput | FullPageNormalizedOutput) -> str:
+    """Format runtime scroll probe output for prompt generation."""
+    scroll_probe = data.animations.scroll_probe
+    if scroll_probe is None:
+        return "## Scroll Probe\nNo runtime scroll probe was captured"
+
+    lines = [
+        "## Scroll Probe",
+        f"Context: {scroll_probe.context}",
+        f"Triggered: {scroll_probe.triggered}",
+        f"Range: {round(scroll_probe.range_start, 2)} -> {round(scroll_probe.range_end, 2)}",
+        f"Steps: {scroll_probe.step_count}",
+        f"FPS: {scroll_probe.fps}",
+    ]
+
+    if scroll_probe.tracked_selectors:
+        lines.append(
+            "Tracked Selectors: "
+            + ", ".join(
+                "target root" if selector == "__target__" else f"`{selector}`"
+                for selector in scroll_probe.tracked_selectors
+            )
+        )
+    if scroll_probe.overlay_selectors:
+        lines.append(
+            "Overlay Selectors: "
+            + ", ".join(f"`{selector}`" for selector in scroll_probe.overlay_selectors)
+        )
+    if scroll_probe.frames_dir:
+        lines.append(f"Frames Dir: {scroll_probe.frames_dir}")
+    if scroll_probe.video_path:
+        lines.append(f"Video Path: {scroll_probe.video_path}")
+    if scroll_probe.key_frames:
+        lines.append(f"Key Frames: {scroll_probe.key_frames}")
+
+    if scroll_probe.observations:
+        lines.append("Observations:")
+        for observation in scroll_probe.observations:
+            lines.append(f"  - {observation}")
+
+    if scroll_probe.state_changes:
+        lines.append("State Changes:")
+        for change in scroll_probe.state_changes[:8]:
+            pretty_selector = (
+                "target root" if change.selector == "__target__" else f"`{change.selector}`"
+            )
+            lines.append(
+                f"  - {pretty_selector}: {', '.join(change.property_changes.keys())}"
+            )
+
+    if scroll_probe.limitations:
+        lines.append("Limitations:")
+        for limitation in scroll_probe.limitations:
+            lines.append(f"  - {limitation}")
 
     return "\n".join(lines)
 
@@ -262,6 +406,15 @@ def format_rich_media(data: NormalizedOutput | FullPageNormalizedOutput) -> str:
         lines.append(
             f"- {media.type.value} via `{media.selector}`{source_summary}{poster_summary}"
         )
+        if media.document_level:
+            lines.append("  Scope: document-level overlay outside the component subtree")
+        if media.linked_selectors:
+            lines.append(
+                "  Linked Selectors: "
+                + ", ".join(f"`{selector}`" for selector in media.linked_selectors)
+            )
+        if media.effect_summary:
+            lines.append(f"  Effect: {media.effect_summary}")
         if media.snapshot_path:
             lines.append(f"  Snapshot: {media.snapshot_path}")
         if flags:

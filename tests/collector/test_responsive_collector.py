@@ -1,18 +1,9 @@
 """Tests for ResponsiveCollector."""
 
-import os
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-# Ensure project root is at the FRONT of sys.path
-project_root = str(Path(__file__).resolve().parent.parent.parent)
-while project_root in sys.path:
-    sys.path.remove(project_root)
-sys.path.insert(0, project_root)
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from playwright.sync_api import Page, Locator
+from playwright.async_api import Locator, Page
 
 from collector.extraction_scope import ExtractionScope
 from collector.responsive_collector import ResponsiveCollector
@@ -23,77 +14,62 @@ class TestResponsiveCollectorInit:
     """Tests for ResponsiveCollector initialization."""
 
     def test_init_stores_page(self):
-        """init should store page reference."""
         mock_page = MagicMock(spec=Page)
-
         collector = ResponsiveCollector(mock_page)
-
         assert collector.page == mock_page
 
     def test_standard_breakpoints_defined(self):
-        """STANDARD_BREAKPOINTS should be defined."""
-        mock_page = MagicMock(spec=Page)
-
-        collector = ResponsiveCollector(mock_page)
-
+        collector = ResponsiveCollector(MagicMock(spec=Page))
         assert hasattr(collector, "STANDARD_BREAKPOINTS")
         assert 320 in collector.STANDARD_BREAKPOINTS
         assert 768 in collector.STANDARD_BREAKPOINTS
         assert 1024 in collector.STANDARD_BREAKPOINTS
 
 
+@pytest.mark.asyncio
 class TestResponsiveCollectorDetectBreakpoints:
     """Tests for ResponsiveCollector.detect_breakpoints()."""
 
-    def test_detect_breakpoints_returns_list(self):
-        """detect_breakpoints() should return a list of integers."""
+    async def test_detect_breakpoints_returns_list(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.return_value = [768, 1024, 1440]
+        mock_page.evaluate = AsyncMock(return_value=[768, 1024, 1440])
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.detect_breakpoints()
+        result = await ResponsiveCollector(mock_page).detect_breakpoints()
 
         assert isinstance(result, list)
-        assert all(isinstance(b, int) for b in result)
+        assert all(isinstance(breakpoint, int) for breakpoint in result)
 
-    def test_detect_breakpoints_parses_media_queries(self):
-        """detect_breakpoints() should parse @media rules from CSSOM."""
+    async def test_detect_breakpoints_parses_media_queries(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.return_value = [480, 768, 1024, 1280]
+        mock_page.evaluate = AsyncMock(return_value=[480, 768, 1024, 1280])
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.detect_breakpoints()
+        result = await ResponsiveCollector(mock_page).detect_breakpoints()
 
         assert 768 in result
         assert 1024 in result
 
-    def test_detect_breakpoints_handles_empty_stylesheets(self):
-        """detect_breakpoints() should handle pages with no media queries."""
+    async def test_detect_breakpoints_handles_empty_stylesheets(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.return_value = []
+        mock_page.evaluate = AsyncMock(return_value=[])
 
         collector = ResponsiveCollector(mock_page)
-        result = collector.detect_breakpoints()
+        result = await collector.detect_breakpoints()
 
-        # Should return standard breakpoints when none found
         assert result == collector.STANDARD_BREAKPOINTS
 
-    def test_detect_breakpoints_includes_standard_on_error(self):
-        """detect_breakpoints() should return standard breakpoints on error."""
+    async def test_detect_breakpoints_includes_standard_on_error(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.side_effect = Exception("CSSOM access denied")
+        mock_page.evaluate = AsyncMock(side_effect=Exception("CSSOM access denied"))
 
         collector = ResponsiveCollector(mock_page)
-        result = collector.detect_breakpoints()
+        result = await collector.detect_breakpoints()
 
-        # Should fall back to standard breakpoints
         assert result == collector.STANDARD_BREAKPOINTS
 
-    def test_detect_breakpoints_uses_target_frame_when_scope_is_provided(self):
-        """detect_breakpoints() should inspect media queries inside the target frame."""
+    async def test_detect_breakpoints_uses_target_frame_when_scope_is_provided(self):
         mock_page = MagicMock(spec=Page)
         mock_frame = MagicMock()
-        mock_frame.evaluate.return_value = [640, 960]
+        mock_frame.evaluate = AsyncMock(return_value=[640, 960])
         scope = ExtractionScope(
             page=mock_page,
             frame=mock_frame,
@@ -106,32 +82,32 @@ class TestResponsiveCollectorDetectBreakpoints:
             document_base_url="https://example.com/embed",
         )
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.detect_breakpoints(scope=scope)
+        result = await ResponsiveCollector(mock_page).detect_breakpoints(scope=scope)
 
         assert result == [640, 960]
-        mock_frame.evaluate.assert_called_once()
+        mock_frame.evaluate.assert_awaited_once()
 
 
+@pytest.mark.asyncio
 class TestResponsiveCollectorCollectAtViewport:
     """Tests for ResponsiveCollector.collect_at_viewport()."""
 
-    def test_collect_at_viewport_sets_viewport(self):
-        """collect_at_viewport() should set viewport size."""
+    async def test_collect_at_viewport_sets_viewport(self):
         mock_page = MagicMock(spec=Page)
+        mock_page.set_viewport_size = AsyncMock()
         mock_locator = MagicMock(spec=Locator)
-        mock_locator.evaluate.return_value = {"width": 100, "display": "block"}
+        mock_locator.evaluate = AsyncMock(return_value={"width": 100, "display": "block"})
 
         collector = ResponsiveCollector(mock_page)
-        collector.collect_at_viewport(mock_locator, width=768, height=1024)
+        await collector.collect_at_viewport(mock_locator, width=768, height=1024)
 
-        mock_page.set_viewport_size.assert_called_once_with(
+        mock_page.set_viewport_size.assert_awaited_once_with(
             {"width": 768, "height": 1024}
         )
 
-    def test_collect_at_viewport_returns_element_state(self):
-        """collect_at_viewport() should return element state dict."""
+    async def test_collect_at_viewport_returns_element_state(self):
         mock_page = MagicMock(spec=Page)
+        mock_page.set_viewport_size = AsyncMock()
         expected_state = {
             "display": "flex",
             "flexDirection": "column",
@@ -139,82 +115,81 @@ class TestResponsiveCollectorCollectAtViewport:
             "height": 100,
         }
         mock_locator = MagicMock(spec=Locator)
-        mock_locator.evaluate.return_value = expected_state
+        mock_locator.evaluate = AsyncMock(return_value=expected_state)
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.collect_at_viewport(mock_locator, width=768, height=1024)
+        result = await ResponsiveCollector(mock_page).collect_at_viewport(
+            mock_locator,
+            width=768,
+            height=1024,
+        )
 
         assert result == expected_state
 
-    def test_collect_at_viewport_captures_computed_styles(self):
-        """collect_at_viewport() should capture computed styles."""
+    async def test_collect_at_viewport_captures_computed_styles(self):
         mock_page = MagicMock(spec=Page)
+        mock_page.set_viewport_size = AsyncMock()
         mock_locator = MagicMock(spec=Locator)
-        mock_locator.evaluate.return_value = {"display": "block"}
+        mock_locator.evaluate = AsyncMock(return_value={"display": "block"})
 
-        collector = ResponsiveCollector(mock_page)
-        collector.collect_at_viewport(mock_locator, width=480, height=800)
+        await ResponsiveCollector(mock_page).collect_at_viewport(
+            mock_locator,
+            width=480,
+            height=800,
+        )
 
-        # Verify locator.evaluate was called
-        mock_locator.evaluate.assert_called_once()
+        mock_locator.evaluate.assert_awaited_once()
 
 
+@pytest.mark.asyncio
 class TestResponsiveCollectorCollectAll:
     """Tests for ResponsiveCollector.collect_all()."""
 
-    def test_collect_all_returns_responsive_behavior(self):
-        """collect_all() should return ResponsiveBehavior object."""
+    async def test_collect_all_returns_responsive_behavior(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.return_value = [768, 1024]
+        mock_page.evaluate = AsyncMock(return_value=[768, 1024])
+        mock_page.set_viewport_size = AsyncMock()
         mock_locator = MagicMock(spec=Locator)
-        mock_locator.evaluate.return_value = {"display": "block", "maxWidth": "100%"}
+        mock_locator.evaluate = AsyncMock(return_value={"display": "block", "maxWidth": "100%"})
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.collect_all(mock_locator)
+        result = await ResponsiveCollector(mock_page).collect_all(mock_locator)
 
         assert isinstance(result, ResponsiveBehavior)
 
-    def test_collect_all_tests_all_breakpoints(self):
-        """collect_all() should test element at all breakpoints."""
+    async def test_collect_all_tests_all_breakpoints(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.return_value = [768, 1024]
+        mock_page.evaluate = AsyncMock(return_value=[768, 1024])
+        mock_page.set_viewport_size = AsyncMock()
         mock_locator = MagicMock(spec=Locator)
-        mock_locator.evaluate.return_value = {"display": "block", "maxWidth": "100%"}
+        mock_locator.evaluate = AsyncMock(return_value={"display": "block", "maxWidth": "100%"})
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.collect_all(mock_locator)
+        await ResponsiveCollector(mock_page).collect_all(mock_locator)
 
-        # Should set viewport for each breakpoint
-        assert mock_page.set_viewport_size.call_count >= 2
+        assert mock_page.set_viewport_size.await_count >= 2
 
-    def test_collect_all_detects_layout_changes(self):
-        """collect_all() should detect layout changes between breakpoints."""
+    async def test_collect_all_detects_layout_changes(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.return_value = [768]
-
-        # Mock different states at different viewports
-        states = [
-            {"display": "block", "width": 300, "maxWidth": "100%"},  # Mobile
-            {"display": "flex", "width": 600, "maxWidth": "100%"},   # Tablet
-            {"display": "grid", "width": 900, "maxWidth": "100%"},   # Desktop
-        ]
-
+        mock_page.evaluate = AsyncMock(return_value=[768])
+        mock_page.set_viewport_size = AsyncMock()
         mock_locator = MagicMock(spec=Locator)
-        mock_locator.evaluate.side_effect = states
+        mock_locator.evaluate = AsyncMock(
+            side_effect=[
+                {"display": "block", "width": 300, "maxWidth": "100%"},
+                {"display": "flex", "width": 600, "maxWidth": "100%"},
+                {"display": "grid", "width": 900, "maxWidth": "100%"},
+            ]
+        )
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.collect_all(mock_locator)
+        result = await ResponsiveCollector(mock_page).collect_all(mock_locator)
 
         assert result is not None
 
-    def test_collect_all_includes_detected_breakpoints(self):
-        """collect_all() should include detected media query breakpoints."""
+    async def test_collect_all_includes_detected_breakpoints(self):
         mock_page = MagicMock(spec=Page)
-        mock_page.evaluate.return_value = [992, 1200]
+        mock_page.evaluate = AsyncMock(return_value=[992, 1200])
+        mock_page.set_viewport_size = AsyncMock()
         mock_locator = MagicMock(spec=Locator)
-        mock_locator.evaluate.return_value = {"display": "block", "maxWidth": "100%"}
+        mock_locator.evaluate = AsyncMock(return_value={"display": "block", "maxWidth": "100%"})
 
-        collector = ResponsiveCollector(mock_page)
-        result = collector.collect_all(mock_locator)
+        result = await ResponsiveCollector(mock_page).collect_all(mock_locator)
 
         assert isinstance(result, ResponsiveBehavior)

@@ -73,6 +73,35 @@ class StyleSummary(BaseModel):
     effects: dict[str, Any]
 
 
+class ScrollProbeStateChange(BaseModel):
+    """Observed property changes for one selector during the scroll probe."""
+
+    selector: str
+    property_changes: dict[str, Any]
+    first_changed_step: int
+    peak_changed_step: int
+    notes: list[str] = Field(default_factory=list)
+
+
+class ScrollProbeSummary(BaseModel):
+    """Structured output from the runtime scroll probe."""
+
+    context: str
+    triggered: bool
+    range_start: float
+    range_end: float
+    step_count: int
+    fps: int
+    frames_dir: Optional[str] = None
+    video_path: Optional[str] = None
+    key_frames: list[int] = Field(default_factory=list)
+    tracked_selectors: list[str] = Field(default_factory=list)
+    overlay_selectors: list[str] = Field(default_factory=list)
+    observations: list[str] = Field(default_factory=list)
+    state_changes: list[ScrollProbeStateChange] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
 class AnimationSummary(BaseModel):
     """Summary of animations and transitions."""
 
@@ -80,6 +109,7 @@ class AnimationSummary(BaseModel):
     css_transitions: list[TransitionData]
     scroll_effects: list[str]
     recording: Optional[AnimationRecording] = None
+    scroll_probe: Optional[ScrollProbeSummary] = None
 
 
 class InteractionSummary(BaseModel):
@@ -111,6 +141,9 @@ class RichMediaCapture(BaseModel):
     poster_url: Optional[str] = None
     snapshot_path: Optional[str] = None
     playback_flags: dict[str, bool] = Field(default_factory=dict)
+    document_level: bool = False
+    linked_selectors: list[str] = Field(default_factory=list)
+    effect_summary: Optional[str] = None
     limitations: list[str] = Field(default_factory=list)
 
 
@@ -137,11 +170,18 @@ class BaseNormalizedOutput(BaseModel):
 class PageSectionSummary(BaseModel):
     """High-level section detected within a full-page extraction."""
 
+    section_id: str = ""
     name: str
     selector: str
     tag: str
     text_excerpt: str
     bounding_box: BoundingBox
+    html: str = ""
+    screenshot_path: Optional[str] = None
+    interactions: InteractionSummary | None = None
+    animations: AnimationSummary | None = None
+    rich_media: list[RichMediaCapture] = Field(default_factory=list)
+    collection_limitations: list[str] = Field(default_factory=list)
 
 
 class PageCaptureInfo(BaseModel):

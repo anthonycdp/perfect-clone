@@ -1,7 +1,9 @@
 """Tests for ExtractionOrchestrator."""
 
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 import orchestrator as orchestrator_module
 from collector.extraction_scope import ExtractionScope
@@ -26,6 +28,8 @@ from models.synthesis import (
     SynthesisOutput,
 )
 
+pytestmark = pytest.mark.asyncio
+
 
 def build_synthesis_output() -> SynthesisOutput:
     """Create a valid synthesis output."""
@@ -35,11 +39,7 @@ def build_synthesis_output() -> SynthesisOutput:
             visual="Visual",
             purpose="Purpose",
         ),
-        component_tree=ComponentTree(
-            name="LandingPage",
-            role="page",
-            children=[],
-        ),
+        component_tree=ComponentTree(name="LandingPage", role="page", children=[]),
         interactions=[],
         responsive_rules=[ResponsiveRule(breakpoint="768px", changes=["stack"])],
         dependencies=[Dependency(name="None", reason="No dependency")],
@@ -71,13 +71,7 @@ def build_full_page_output() -> FullPageNormalizedOutput:
             text_content="",
             computed_styles={},
         ),
-        styles=StyleSummary(
-            layout={},
-            spacing={},
-            typography={},
-            colors={},
-            effects={},
-        ),
+        styles=StyleSummary(layout={}, spacing={}, typography={}, colors={}, effects={}),
         animations=AnimationSummary(
             css_animations=[],
             css_transitions=[],
@@ -114,33 +108,67 @@ class FakeSynthesizer:
         return build_synthesis_output()
 
 
-def test_extract_full_page_skips_target_lookup(monkeypatch):
+async def test_extract_full_page_skips_target_lookup(monkeypatch):
     """Full-page mode should not use TargetFinder and should return synthesis output."""
     monkeypatch.setattr(orchestrator_module, "OpenAISynthesizer", FakeSynthesizer)
 
     page = Mock()
     page.url = "https://example.com"
-    page.title.return_value = "Landing"
+    page.title = AsyncMock(return_value="Landing")
     page.viewport_size = {"width": 1440, "height": 900}
-    page.evaluate.side_effect = [
-        ["https://cdn.example.com/app.js"],
-        ["https://cdn.example.com/app.css"],
-    ]
-    page.locator.return_value = Mock(first=Mock())
-    page.wait_for_timeout.return_value = None
-    page.wait_for_load_state.return_value = None
+    page.evaluate = AsyncMock(
+        side_effect=[
+            ["https://cdn.example.com/app.js"],
+            ["https://cdn.example.com/app.css"],
+        ]
+    )
+    body_locator = Mock()
+    body_locator.first = body_locator
+    page.locator.return_value = body_locator
+    page.wait_for_timeout = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
 
     browser = Mock()
     browser.page = page
+    browser.start = AsyncMock()
+    browser.navigate = AsyncMock()
+    browser.close = AsyncMock()
 
     orchestrator = orchestrator_module.ExtractionOrchestrator(api_key="test-key")
     orchestrator.browser = browser
-    orchestrator._load_lazy_content = Mock(return_value=True)
-    orchestrator._capture_page_screenshot = Mock(return_value="/tmp/page.png")
-    orchestrator._extract_page_sections = Mock(return_value=[])
+    orchestrator._load_lazy_content = AsyncMock(return_value=True)
+    full_page_scope = ExtractionScope(
+        page=page,
+        frame=Mock(),
+        target=body_locator,
+        selector_used="body",
+        strategy="css",
+        frame_url="https://example.com",
+        frame_name=None,
+        same_origin_accessible=True,
+        document_base_url="https://example.com",
+        within_shadow_dom=False,
+    )
+    orchestrator._resolve_full_page_root = AsyncMock(
+        return_value=(body_locator, full_page_scope)
+    )
+    orchestrator._capture_full_page_screenshot = AsyncMock(return_value="/tmp/page.png")
+    orchestrator._extract_document_bounding_box = AsyncMock(
+        return_value={"x": 0, "y": 0, "width": 1440, "height": 3200}
+    )
+    orchestrator._build_page_metadata = AsyncMock(
+        return_value={
+            "url": "https://example.com",
+            "title": "Landing",
+            "viewport": {"width": 1440, "height": 900},
+            "loaded_scripts": ["https://cdn.example.com/app.js"],
+            "loaded_stylesheets": ["https://cdn.example.com/app.css"],
+        }
+    )
+    orchestrator._extract_page_sections = AsyncMock(return_value=[])
     orchestrator._save_normalized = Mock()
 
-    def fail_if_called(*_args, **_kwargs):
+    async def fail_if_called(*_args, **_kwargs):
         raise AssertionError("TargetFinder should not be used in full_page mode")
 
     monkeypatch.setattr(orchestrator_module.TargetFinder, "find", fail_if_called)
@@ -149,7 +177,7 @@ def test_extract_full_page_skips_target_lookup(monkeypatch):
         def __init__(self, _page):
             pass
 
-        def extract_page(self):
+        async def extract(self, _target):
             return {
                 "html": "<body><section>Hero</section></body>",
                 "dom_tree": {
@@ -167,7 +195,7 @@ def test_extract_full_page_skips_target_lookup(monkeypatch):
         def __init__(self, _page):
             pass
 
-        def extract_page(self):
+        async def extract(self, _target, scope=None):
             return {
                 "computed_styles": {"display": "block"},
                 "animations": [],
@@ -179,7 +207,7 @@ def test_extract_full_page_skips_target_lookup(monkeypatch):
         def __init__(self, _page):
             pass
 
-        def map(self, _target):
+        async def map(self, _target):
             return {
                 "hoverable": [],
                 "clickable": [],
@@ -191,42 +219,64 @@ def test_extract_full_page_skips_target_lookup(monkeypatch):
         def __init__(self, _page):
             pass
 
-        def play_all(self, _target, _interactions, scope=None):
+        async def play_all(self, _target, _interactions, scope=None):
             return []
 
     class FakeAnimationRecorder:
         def __init__(self, _page, _output_dir):
             pass
 
-        def record(self, _target):
+        async def record(self, _target):
             return None
 
     class FakeAssetDownloader:
         def __init__(self, _page, _output_dir, scope=None):
             self.last_limitations = []
 
-        def download_all(self, _target):
+        async def download_all(self, _target):
             return []
 
     class FakeRichMediaCollector:
         def __init__(self, _page, _output_dir, scope=None):
             self.last_limitations = []
 
-        def collect(self, _target):
+        async def collect(self, _target):
             return []
+
+    class FakeScrollProbeCollector:
+        def __init__(self, _page, _output_dir):
+            self.last_limitations = []
+
+        async def collect(self, _target, mode, scope=None, rich_media=None):
+            return {
+                "context": "page",
+                "triggered": False,
+                "range_start": 0,
+                "range_end": 0,
+                "step_count": 0,
+                "fps": 12,
+                "frames_dir": None,
+                "video_path": None,
+                "key_frames": [],
+                "tracked_selectors": ["__target__"],
+                "overlay_selectors": [],
+                "observations": [],
+                "state_changes": [],
+                "limitations": [],
+            }
 
     class FakeLibraryDetector:
         def __init__(self, _page):
             self.last_limitations = []
 
-        def detect(self, scope=None):
+        async def detect(self, scope=None):
             return []
 
     class FakeResponsiveCollector:
         def __init__(self, _page):
             pass
 
-        def collect_all(self, _target, scope=None):
+        async def collect_all(self, _target, scope=None):
             return SimpleNamespace(
                 model_dump=lambda: {
                     "breakpoints": [],
@@ -249,37 +299,40 @@ def test_extract_full_page_skips_target_lookup(monkeypatch):
     monkeypatch.setattr(orchestrator_module, "AnimationRecorder", FakeAnimationRecorder)
     monkeypatch.setattr(orchestrator_module, "AssetDownloader", FakeAssetDownloader)
     monkeypatch.setattr(orchestrator_module, "RichMediaCollector", FakeRichMediaCollector)
+    monkeypatch.setattr(orchestrator_module, "ScrollProbeCollector", FakeScrollProbeCollector)
     monkeypatch.setattr(orchestrator_module, "LibraryDetector", FakeLibraryDetector)
     monkeypatch.setattr(orchestrator_module, "ResponsiveCollector", FakeResponsiveCollector)
     monkeypatch.setattr(orchestrator_module, "ContextBuilder", FakeContextBuilder)
 
-    result = orchestrator.extract(
-        "https://example.com",
-        extraction_mode="full_page",
-    )
+    result = await orchestrator.extract("https://example.com", extraction_mode="full_page")
 
     assert result.recreation_prompt == "Build the landing page"
     assert orchestrator.last_normalized_output.mode.value == "full_page"
-    browser.start.assert_called_once()
-    browser.navigate.assert_called_once_with("https://example.com")
-    browser.close.assert_called_once()
+    browser.start.assert_awaited_once()
+    browser.navigate.assert_awaited_once_with("https://example.com")
+    browser.close.assert_awaited_once()
 
 
-def test_extract_component_passes_frame_scope(monkeypatch):
+async def test_extract_component_passes_frame_scope(monkeypatch):
     """Component mode should propagate frame metadata and scope-aware collectors."""
     monkeypatch.setattr(orchestrator_module, "OpenAISynthesizer", FakeSynthesizer)
 
     page = Mock()
     page.url = "https://example.com"
-    page.title.return_value = "Component"
+    page.title = AsyncMock(return_value="Component")
     page.viewport_size = {"width": 1280, "height": 720}
-    page.evaluate.side_effect = [
-        ["https://cdn.example.com/app.js"],
-        ["https://cdn.example.com/app.css"],
-    ]
+    page.evaluate = AsyncMock(
+        side_effect=[
+            ["https://cdn.example.com/app.js"],
+            ["https://cdn.example.com/app.css"],
+        ]
+    )
 
     browser = Mock()
     browser.page = page
+    browser.start = AsyncMock()
+    browser.navigate = AsyncMock()
+    browser.close = AsyncMock()
 
     target = Mock()
     frame = Mock()
@@ -300,14 +353,14 @@ def test_extract_component_passes_frame_scope(monkeypatch):
 
     orchestrator = orchestrator_module.ExtractionOrchestrator(api_key="test-key")
     orchestrator.browser = browser
-    orchestrator._capture_target_screenshot = Mock(return_value="/tmp/target.png")
+    orchestrator._capture_target_screenshot = AsyncMock(return_value="/tmp/target.png")
     orchestrator._save_normalized = Mock()
 
     class FakeDOMExtractor:
         def __init__(self, _page):
             pass
 
-        def extract(self, _target):
+        async def extract(self, _target):
             return {
                 "html": "<section id='hero'></section>",
                 "dom_tree": {
@@ -325,7 +378,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
         def __init__(self, _page):
             self.calls = []
 
-        def extract(self, _target, scope=None):
+        async def extract(self, _target, scope=None):
             self.calls.append(scope)
             return {
                 "computed_styles": {"display": "block"},
@@ -339,7 +392,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
         def __init__(self, _page):
             pass
 
-        def map(self, _target):
+        async def map(self, _target):
             return {
                 "hoverable": [],
                 "clickable": [{"selector": "button"}],
@@ -353,7 +406,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
         def __init__(self, _page):
             pass
 
-        def play_all(self, _target, _interactions, scope=None):
+        async def play_all(self, _target, _interactions, scope=None):
             FakeInteractionPlayer.seen_scope = scope
             return []
 
@@ -361,7 +414,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
         def __init__(self, _page, _output_dir):
             pass
 
-        def record(self, _target):
+        async def record(self, _target):
             return None
 
     class FakeAssetDownloader:
@@ -371,7 +424,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
             FakeAssetDownloader.seen_scope = scope
             self.last_limitations = ["Could not extract @font-face rules from the target frame stylesheets."]
 
-        def download_all(self, _target):
+        async def download_all(self, _target):
             return []
 
     class FakeRichMediaCollector:
@@ -381,8 +434,32 @@ def test_extract_component_passes_frame_scope(monkeypatch):
             FakeRichMediaCollector.seen_scope = scope
             self.last_limitations = ["Canvas export fell back to screenshot."]
 
-        def collect(self, _target):
+        async def collect(self, _target):
             return []
+
+    class FakeScrollProbeCollector:
+        def __init__(self, _page, _output_dir):
+            self.last_limitations = []
+
+        async def collect(self, _target, mode, scope=None, rich_media=None):
+            assert mode.value == "component"
+            assert scope is not None
+            return {
+                "context": "frame",
+                "triggered": True,
+                "range_start": 100,
+                "range_end": 500,
+                "step_count": 8,
+                "fps": 12,
+                "frames_dir": "/tmp/scroll_probe/frames",
+                "video_path": "/tmp/scroll_probe/recording.webm",
+                "key_frames": [0, 3, 7],
+                "tracked_selectors": ["__target__", ".webgl-img"],
+                "overlay_selectors": ["canvas"],
+                "observations": ["Document-level overlay media changes across viewport scroll."],
+                "state_changes": [],
+                "limitations": [],
+            }
 
     class FakeLibraryDetector:
         seen_scope = None
@@ -390,7 +467,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
         def __init__(self, _page):
             self.last_limitations = ["Could not inspect external libraries in the frame document."]
 
-        def detect(self, scope=None):
+        async def detect(self, scope=None):
             FakeLibraryDetector.seen_scope = scope
             return []
 
@@ -400,7 +477,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
         def __init__(self, _page):
             pass
 
-        def collect_all(self, _target, scope=None):
+        async def collect_all(self, _target, scope=None):
             FakeResponsiveCollector.seen_scope = scope
             return SimpleNamespace(
                 model_dump=lambda: {
@@ -428,6 +505,10 @@ def test_extract_component_passes_frame_scope(monkeypatch):
                 "Canvas export fell back to screenshot.",
                 "Could not inspect external libraries in the frame document.",
             ]
+            assert extraction_data["animations"]["observed_scroll_effects"] == [
+                "Document-level overlay media changes across viewport scroll."
+            ]
+            assert extraction_data["animations"]["scroll_probe"]["context"] == "frame"
             return NormalizedOutput(
                 page=PageInfo(
                     url="https://example.com",
@@ -456,13 +537,7 @@ def test_extract_component_passes_frame_scope(monkeypatch):
                     text_content="",
                     computed_styles={},
                 ),
-                styles=StyleSummary(
-                    layout={},
-                    spacing={},
-                    typography={},
-                    colors={},
-                    effects={},
-                ),
+                styles=StyleSummary(layout={}, spacing={}, typography={}, colors={}, effects={}),
                 animations=AnimationSummary(
                     css_animations=[],
                     css_transitions=[],
@@ -486,7 +561,11 @@ def test_extract_component_passes_frame_scope(monkeypatch):
                 external_libraries=[],
             )
 
-    monkeypatch.setattr(orchestrator_module.TargetFinder, "find", Mock(return_value=scope))
+    monkeypatch.setattr(
+        orchestrator_module.TargetFinder,
+        "find",
+        AsyncMock(return_value=scope),
+    )
     monkeypatch.setattr(orchestrator_module, "DOMExtractor", FakeDOMExtractor)
     monkeypatch.setattr(orchestrator_module, "StyleExtractor", FakeStyleExtractor)
     monkeypatch.setattr(orchestrator_module, "InteractionMapper", FakeInteractionMapper)
@@ -494,11 +573,12 @@ def test_extract_component_passes_frame_scope(monkeypatch):
     monkeypatch.setattr(orchestrator_module, "AnimationRecorder", FakeAnimationRecorder)
     monkeypatch.setattr(orchestrator_module, "AssetDownloader", FakeAssetDownloader)
     monkeypatch.setattr(orchestrator_module, "RichMediaCollector", FakeRichMediaCollector)
+    monkeypatch.setattr(orchestrator_module, "ScrollProbeCollector", FakeScrollProbeCollector)
     monkeypatch.setattr(orchestrator_module, "LibraryDetector", FakeLibraryDetector)
     monkeypatch.setattr(orchestrator_module, "ResponsiveCollector", FakeResponsiveCollector)
     monkeypatch.setattr(orchestrator_module, "ContextBuilder", FakeContextBuilder)
 
-    result = orchestrator.extract(
+    result = await orchestrator.extract(
         "https://example.com",
         strategy="xpath",
         query='//*[@id="hero"]',
@@ -511,3 +591,173 @@ def test_extract_component_passes_frame_scope(monkeypatch):
     assert FakeRichMediaCollector.seen_scope is scope
     assert FakeLibraryDetector.seen_scope is scope
     assert FakeResponsiveCollector.seen_scope is scope
+
+
+async def test_collect_full_page_data_includes_section_captures(monkeypatch):
+    """Full-page raw extraction should embed enriched section captures and merge their limitations."""
+    monkeypatch.setattr(orchestrator_module, "OpenAISynthesizer", FakeSynthesizer)
+
+    body_locator = Mock()
+    body_locator.first = body_locator
+
+    page = Mock()
+    page.url = "https://example.com"
+    page.title = AsyncMock(return_value="Landing")
+    page.viewport_size = {"width": 1440, "height": 900}
+    page.evaluate = AsyncMock(side_effect=[[], []])
+    page.locator.return_value = body_locator
+
+    browser = Mock()
+    browser.page = page
+    browser.close = AsyncMock()
+
+    orchestrator = orchestrator_module.ExtractionOrchestrator(api_key="test-key")
+    orchestrator.browser = browser
+    full_page_scope = ExtractionScope(
+        page=page,
+        frame=Mock(),
+        target=body_locator,
+        selector_used="body",
+        strategy="css",
+        frame_url="https://example.com",
+        frame_name=None,
+        same_origin_accessible=True,
+        document_base_url="https://example.com",
+        within_shadow_dom=False,
+    )
+    orchestrator._resolve_full_page_root = AsyncMock(
+        return_value=(body_locator, full_page_scope)
+    )
+    orchestrator._load_lazy_content = AsyncMock(return_value=True)
+    orchestrator._capture_full_page_screenshot = AsyncMock(return_value="/tmp/page.png")
+    orchestrator._extract_document_bounding_box = AsyncMock(
+        return_value={"x": 0, "y": 0, "width": 1440, "height": 3200}
+    )
+    orchestrator._build_page_metadata = AsyncMock(
+        return_value={
+            "url": "https://example.com",
+            "title": "Landing",
+            "viewport": {"width": 1440, "height": 900},
+            "loaded_scripts": [],
+            "loaded_stylesheets": [],
+        }
+    )
+    orchestrator._extract_page_sections = AsyncMock(
+        return_value=[
+            {
+                "section_id": "section-01-hero",
+                "name": "Hero",
+                "selector": "section.hero",
+                "tag": "section",
+                "text_excerpt": "Build faster",
+                "bounding_box": {"x": 0, "y": 0, "width": 1440, "height": 640},
+                "probe_selector": '[data-component-extractor-section-id="section-01-hero"]',
+            }
+        ]
+    )
+    orchestrator._collect_shared_target_data = AsyncMock(
+        return_value={
+            "assets": [],
+            "interactions": {
+                "hoverable": [],
+                "clickable": [],
+                "focusable": [],
+                "scroll_containers": [],
+                "observed_states": [],
+            },
+            "animation_recording": None,
+            "scroll_probe": None,
+            "runtime_scroll_effects": [],
+            "responsive": {
+                "breakpoints": [],
+                "is_fluid": True,
+                "has_mobile_menu": False,
+                "grid_changes": [],
+            },
+            "libraries": [],
+            "rich_media": [],
+            "frame_limitations": [],
+            "collection_limitations": ["Landing-level limitation"],
+        }
+    )
+    orchestrator._collect_full_page_sections = AsyncMock(
+        return_value=(
+            [
+                {
+                    "section_id": "section-01-hero",
+                    "name": "Hero",
+                    "selector": "section.hero",
+                    "tag": "section",
+                    "text_excerpt": "Build faster",
+                    "bounding_box": {"x": 0, "y": 0, "width": 1440, "height": 640},
+                    "html": "<section class='hero'></section>",
+                    "screenshot_path": "/tmp/sections/hero.png",
+                    "interactions": {
+                        "hoverable": [{"selector": ".hero-card"}],
+                        "clickable": [{"selector": ".hero-cta"}],
+                        "focusable": [],
+                        "scroll_containers": [],
+                        "observed_states": [],
+                    },
+                    "animations": {
+                        "animations": [],
+                        "transitions": [],
+                        "keyframes": {},
+                        "observed_scroll_effects": ["Hero media lifts on scroll."],
+                        "recording": None,
+                        "scroll_probe": None,
+                    },
+                    "rich_media": [],
+                    "collection_limitations": ["Section limitation"],
+                }
+            ],
+            ["Section limitation"],
+        )
+    )
+
+    class FakeDOMExtractor:
+        def __init__(self, _page):
+            pass
+
+        async def extract(self, _target):
+            return {
+                "html": "<body><section>Hero</section></body>",
+                "dom_tree": {
+                    "tag": "body",
+                    "attributes": {},
+                    "children": [],
+                    "text_content": "",
+                    "computed_styles": {},
+                },
+                "bounding_box": {"x": 0, "y": 0, "width": 1440, "height": 3200},
+            }
+
+    class FakeStyleExtractor:
+        def __init__(self, _page):
+            pass
+
+        async def extract(self, _target, scope=None):
+            return {
+                "computed_styles": {"display": "block"},
+                "animations": [],
+                "transitions": [],
+                "keyframes": {},
+                "limitations": ["Style limitation"],
+            }
+
+    monkeypatch.setattr(orchestrator_module, "DOMExtractor", FakeDOMExtractor)
+    monkeypatch.setattr(orchestrator_module, "StyleExtractor", FakeStyleExtractor)
+
+    raw = await orchestrator._collect_full_page_data(
+        initial_viewport={"width": 1440, "height": 900},
+        progress_callback=None,
+        cancel_check=lambda: False,
+    )
+
+    assert raw["page_capture"]["sections"][0]["section_id"] == "section-01-hero"
+    assert raw["page_capture"]["sections"][0]["screenshot_path"] == "/tmp/sections/hero.png"
+    assert raw["collection_limitations"] == [
+        "Style limitation",
+        "Landing-level limitation",
+        "Section limitation",
+    ]

@@ -1,56 +1,117 @@
 // Component Extractor Web UI - JavaScript Application
+// Premium Dark UI Implementation
 
+// ========================================
 // State
+// ========================================
 let taskId = null;
 let isExtracting = false;
 let eventSource = null;
 
+// ========================================
 // DOM Elements
-const urlInput = document.getElementById('url');
-const queryInput = document.getElementById('query');
-const extractBtn = document.getElementById('extract-btn');
-const progressContainer = document.querySelector('.progress-container');
-const progressFill = document.querySelector('.progress-fill');
-const progressText = document.querySelector('.progress-text');
-const resultPanel = document.querySelector('.result-panel');
-const promptText = document.getElementById('prompt-text');
-const jsonText = document.getElementById('json-text');
-const assetsList = document.getElementById('assets-list');
-const screenshotImg = document.getElementById('screenshot-img');
-const screenshotPreview = document.querySelector('.screenshot-preview');
-const statusText = document.getElementById('status');
-const themeToggle = document.getElementById('theme-toggle');
-const tabs = document.querySelectorAll('.tab');
-const copyButtons = document.querySelectorAll('.btn-copy');
+// ========================================
+const elements = {
+    // Inputs
+    urlInput: document.getElementById('url'),
+    queryInput: document.getElementById('query'),
+    extractBtn: document.getElementById('extract-btn'),
 
+    // Progress
+    progressSection: document.getElementById('progress-section'),
+    progressFill: document.querySelector('.progress-fill'),
+    progressPercentage: document.querySelector('.progress-percentage'),
+    progressText: document.querySelector('.progress-text'),
+
+    // Results
+    emptyState: document.getElementById('empty-state'),
+    resultPanel: document.getElementById('result-panel'),
+    promptText: document.getElementById('prompt-text'),
+    jsonText: document.getElementById('json-text'),
+    assetsList: document.getElementById('assets-list'),
+
+    // Preview
+    screenshotImg: document.getElementById('screenshot-img'),
+    screenshotPreview: document.getElementById('screenshot-preview'),
+    noPreview: document.getElementById('no-preview'),
+    resultActions: document.getElementById('result-actions'),
+    downloadPackageLink: document.getElementById('download-package'),
+    packageExpiry: document.getElementById('package-expiry'),
+
+    // Status & Theme
+    statusText: document.getElementById('status'),
+    statusIndicator: document.getElementById('status-indicator'),
+    themeToggle: document.getElementById('theme-toggle'),
+
+    // Navigation
+    tabs: document.querySelectorAll('.tab'),
+    copyButtons: document.querySelectorAll('.btn-copy'),
+    querySection: document.getElementById('query-section')
+};
+
+// ========================================
 // Initialize
+// ========================================
 document.addEventListener('DOMContentLoaded', () => {
     loadTheme();
     bindEvents();
+    initializeModeVisibility();
 });
 
-// Bind Events
+// ========================================
+// Event Bindings
+// ========================================
 function bindEvents() {
-    extractBtn.addEventListener('click', startExtraction);
-    themeToggle.addEventListener('click', toggleTheme);
+    // Main actions
+    elements.extractBtn.addEventListener('click', startExtraction);
+    elements.themeToggle.addEventListener('click', toggleTheme);
 
-    tabs.forEach(tab => {
+    // Tabs
+    elements.tabs.forEach(tab => {
         tab.addEventListener('click', () => switchTab(tab.dataset.tab));
     });
 
-    copyButtons.forEach(btn => {
+    // Copy buttons
+    elements.copyButtons.forEach(btn => {
         btn.addEventListener('click', () => copyToClipboard(btn.dataset.copy));
     });
 
-    // Update query placeholder based on strategy
+    // Strategy changes
     document.querySelectorAll('input[name="strategy"]').forEach(radio => {
         radio.addEventListener('change', updateQueryPlaceholder);
     });
 
+    // Mode changes
+    document.querySelectorAll('input[name="mode"]').forEach(radio => {
+        radio.addEventListener('change', handleModeChange);
+    });
+
+    // Update query placeholder initially
     updateQueryPlaceholder();
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 }
 
-// Update Query Placeholder
+// ========================================
+// Mode & Strategy Handlers
+// ========================================
+function initializeModeVisibility() {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    updateQuerySectionVisibility(mode === 'component');
+}
+
+function handleModeChange(event) {
+    const isComponentMode = event.target.value === 'component';
+    updateQuerySectionVisibility(isComponentMode);
+}
+
+function updateQuerySectionVisibility(visible) {
+    if (elements.querySection) {
+        elements.querySection.style.display = visible ? 'block' : 'none';
+    }
+}
+
 function updateQueryPlaceholder() {
     const strategy = document.querySelector('input[name="strategy"]:checked').value;
     const placeholders = {
@@ -59,31 +120,38 @@ function updateQueryPlaceholder() {
         text: 'Text to search...',
         html_snippet: '<div class="example">...</div>'
     };
-    queryInput.placeholder = placeholders[strategy] || 'Enter query...';
+    elements.queryInput.placeholder = placeholders[strategy] || 'Enter query...';
 }
 
-// Start Extraction
+// ========================================
+// Extraction Flow
+// ========================================
 async function startExtraction() {
-    const url = urlInput.value.trim();
+    const url = elements.urlInput.value.trim();
     if (!url) {
         showToast('Please enter a URL', 'error');
-        urlInput.focus();
+        elements.urlInput.focus();
         return;
     }
 
     const mode = document.querySelector('input[name="mode"]:checked').value;
     const strategy = document.querySelector('input[name="strategy"]:checked').value;
-    const query = queryInput.value.trim();
+    const query = elements.queryInput.value.trim();
 
-    if (!query && strategy !== 'html_snippet') {
+    if (mode !== 'full_page' && !query) {
         showToast('Please enter a selector or query', 'error');
-        queryInput.focus();
+        elements.queryInput.focus();
         return;
     }
 
+    // Update UI state
     setExtractingState(true);
     showProgress();
     updateProgress({ progress: 0, message: 'Starting extraction...' });
+
+    // Hide previous results and show progress
+    elements.resultPanel.classList.add('hidden');
+    elements.emptyState.classList.add('hidden');
 
     try {
         const response = await fetch('/api/extract', {
@@ -115,30 +183,34 @@ async function startExtraction() {
         setExtractingState(false);
         hideProgress();
         updateStatus('Error');
+        elements.emptyState.classList.remove('hidden');
     }
 }
 
-// Connect Progress Stream (SSE)
+// ========================================
+// Progress Stream (SSE)
+// ========================================
 function connectProgressStream(taskId) {
     if (eventSource) {
         eventSource.close();
     }
 
-    eventSource = new EventSource(`/api/progress/${taskId}`);
+    eventSource = new EventSource(`/api/extract/${taskId}/progress`);
 
     eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
         updateProgress(data);
 
-        if (data.status === 'completed') {
-            eventSource.close();
-            fetchResult(taskId);
-        } else if (data.status === 'failed') {
+        if (data.done && data.step_name === 'error') {
             eventSource.close();
             showToast(data.message || 'Extraction failed', 'error');
             setExtractingState(false);
             hideProgress();
             updateStatus('Failed');
+            setStatusError(true);
+        } else if (data.done) {
+            eventSource.close();
+            fetchResult(taskId);
         }
     };
 
@@ -149,25 +221,31 @@ function connectProgressStream(taskId) {
         setExtractingState(false);
         hideProgress();
         updateStatus('Error');
+        setStatusError(true);
     };
 }
 
-// Update Progress
 function updateProgress(data) {
-    const progress = data.progress || 0;
+    const totalSteps = data.total_steps || 12;
+    const progress = typeof data.progress === 'number'
+        ? data.progress
+        : Math.min(100, Math.round(((data.step || 0) / totalSteps) * 100));
     const message = data.message || 'Processing...';
 
-    progressFill.style.width = `${progress}%`;
-    progressText.textContent = message;
+    elements.progressFill.style.width = `${progress}%`;
+    elements.progressPercentage.textContent = `${progress}%`;
+    elements.progressText.textContent = message;
     updateStatus(message);
 }
 
-// Fetch Result
+// ========================================
+// Result Handling
+// ========================================
 async function fetchResult(taskId) {
     try {
         updateProgress({ progress: 95, message: 'Fetching results...' });
 
-        const response = await fetch(`/api/result/${taskId}`);
+        const response = await fetch(`/api/extract/${taskId}/result`);
 
         if (!response.ok) {
             throw new Error('Failed to fetch result');
@@ -179,74 +257,142 @@ async function fetchResult(taskId) {
         updateProgress({ progress: 100, message: 'Complete!' });
         setExtractingState(false);
         updateStatus('Ready');
+        setStatusSuccess(true);
         showToast('Extraction complete!', 'success');
+
+        // Hide progress after a delay
+        setTimeout(() => {
+            hideProgress();
+        }, 1000);
 
     } catch (error) {
         showToast(error.message, 'error');
         setExtractingState(false);
         hideProgress();
         updateStatus('Error');
+        setStatusError(true);
     }
 }
 
-// Show Result
 function showResult(result) {
-    resultPanel.classList.remove('hidden');
+    // Show result panel
+    elements.emptyState.classList.add('hidden');
+    elements.resultPanel.classList.remove('hidden');
 
     // Show prompt
     if (result.prompt) {
-        promptText.textContent = result.prompt;
+        elements.promptText.textContent = result.prompt;
     }
 
     // Show screenshot
-    if (result.screenshot_base64) {
-        screenshotImg.src = `data:image/png;base64,${result.screenshot_base64}`;
-        screenshotPreview.classList.remove('hidden');
+    if (result.screenshot_url) {
+        elements.screenshotImg.src = result.screenshot_url;
+        elements.screenshotPreview.classList.remove('hidden');
+        elements.noPreview.classList.add('hidden');
     } else {
-        screenshotPreview.classList.add('hidden');
+        elements.screenshotImg.removeAttribute('src');
+        elements.screenshotPreview.classList.add('hidden');
+        elements.noPreview.classList.remove('hidden');
+    }
+
+    // Show download
+    if (result.download_url) {
+        elements.downloadPackageLink.href = result.download_url;
+        elements.downloadPackageLink.setAttribute(
+            'download',
+            result.download_filename || 'component-extractor-package.zip'
+        );
+        elements.resultActions.classList.remove('hidden');
+    } else {
+        elements.downloadPackageLink.removeAttribute('href');
+        elements.resultActions.classList.add('hidden');
+    }
+
+    // Show expiry
+    if (result.expires_at) {
+        elements.packageExpiry.textContent = `Expires ${formatExpiry(result.expires_at)}`;
+    } else {
+        elements.packageExpiry.textContent = '';
     }
 
     // Show JSON
-    if (result.component_data) {
-        jsonText.textContent = JSON.stringify(result.component_data, null, 2);
+    if (result.full_json) {
+        elements.jsonText.textContent = JSON.stringify(result.full_json, null, 2);
     }
 
     // Show assets
     if (result.assets && result.assets.length > 0) {
-        assetsList.innerHTML = result.assets.map(asset => `
+        elements.assetsList.innerHTML = result.assets.map(asset => `
             <li>
-                <span>${asset.type}: ${asset.filename}</span>
-                <a href="${asset.path}" target="_blank">View</a>
+                <span>
+                    <strong>${asset.type}</strong>: ${asset.filename}
+                </span>
+                ${asset.url ? `<a href="${asset.url}" target="_blank" rel="noopener noreferrer">View</a>` : ''}
             </li>
         `).join('');
     } else {
-        assetsList.innerHTML = '<li>No assets extracted</li>';
+        elements.assetsList.innerHTML = '<li class="no-assets">No assets extracted</li>';
     }
 
     // Switch to prompt tab
     switchTab('prompt');
 }
 
-// Set Extracting State
+// ========================================
+// UI State Management
+// ========================================
 function setExtractingState(extracting) {
     isExtracting = extracting;
-    extractBtn.disabled = extracting;
-    extractBtn.textContent = extracting ? 'Extracting...' : 'Extract';
+    elements.extractBtn.disabled = extracting;
+
+    const btnSpan = elements.extractBtn.querySelector('span');
+    if (btnSpan) {
+        btnSpan.textContent = extracting ? 'Extracting...' : 'Extract Component';
+    }
+
+    // Add loading class for animation
+    if (extracting) {
+        elements.extractBtn.classList.add('loading');
+    } else {
+        elements.extractBtn.classList.remove('loading');
+    }
 }
 
-// Show/Hide Progress
 function showProgress() {
-    progressContainer.classList.remove('hidden');
+    elements.progressSection.classList.remove('hidden');
 }
 
 function hideProgress() {
-    progressContainer.classList.add('hidden');
-    progressFill.style.width = '0%';
+    elements.progressSection.classList.add('hidden');
+    elements.progressFill.style.width = '0%';
 }
 
-// Switch Tab
+function updateStatus(message) {
+    elements.statusText.textContent = message;
+}
+
+function setStatusSuccess(success) {
+    const dot = elements.statusIndicator.querySelector('.status-dot');
+    if (success) {
+        dot.style.background = 'var(--color-success)';
+    }
+}
+
+function setStatusError(error) {
+    const dot = elements.statusIndicator.querySelector('.status-dot');
+    if (error) {
+        dot.style.background = 'var(--color-error)';
+        setTimeout(() => {
+            dot.style.background = 'var(--color-success)';
+        }, 3000);
+    }
+}
+
+// ========================================
+// Tab Navigation
+// ========================================
 function switchTab(tabName) {
-    tabs.forEach(tab => {
+    elements.tabs.forEach(tab => {
         tab.classList.toggle('active', tab.dataset.tab === tabName);
     });
 
@@ -255,7 +401,9 @@ function switchTab(tabName) {
     });
 }
 
-// Copy to Clipboard
+// ========================================
+// Clipboard
+// ========================================
 async function copyToClipboard(elementId) {
     const element = document.getElementById(elementId);
     const text = element.textContent;
@@ -267,6 +415,8 @@ async function copyToClipboard(elementId) {
         // Fallback for older browsers
         const textarea = document.createElement('textarea');
         textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
         document.body.appendChild(textarea);
         textarea.select();
         document.execCommand('copy');
@@ -275,7 +425,9 @@ async function copyToClipboard(elementId) {
     }
 }
 
-// Show Toast
+// ========================================
+// Toast Notifications
+// ========================================
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -285,19 +437,18 @@ function showToast(message, type = 'info') {
     container.appendChild(toast);
 
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
+        toast.style.animation = 'toastSlideOut 0.3s ease forwards';
         setTimeout(() => {
-            container.removeChild(toast);
+            if (toast.parentNode) {
+                container.removeChild(toast);
+            }
         }, 300);
     }, 3000);
 }
 
-// Update Status
-function updateStatus(message) {
-    statusText.textContent = message;
-}
-
-// Toggle Theme
+// ========================================
+// Theme Management
+// ========================================
 function toggleTheme() {
     const html = document.documentElement;
     const currentTheme = html.getAttribute('data-theme');
@@ -307,8 +458,81 @@ function toggleTheme() {
     localStorage.setItem('theme', newTheme);
 }
 
-// Load Theme
 function loadTheme() {
     const savedTheme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
 }
+
+// ========================================
+// Utilities
+// ========================================
+function formatExpiry(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString(undefined, {
+        dateStyle: 'short',
+        timeStyle: 'short'
+    });
+}
+
+function handleKeyboardShortcuts(event) {
+    // Ctrl/Cmd + Enter to extract
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        if (!isExtracting) {
+            startExtraction();
+        }
+    }
+
+    // Escape to cancel (if we implement cancellation)
+    if (event.key === 'Escape' && isExtracting) {
+        // Could implement cancellation here
+    }
+}
+
+// ========================================
+// Animations & Micro-interactions
+// ========================================
+
+// Add ripple effect to buttons
+document.addEventListener('click', function(e) {
+    const button = e.target.closest('.cta-button, .download-button');
+    if (!button) return;
+
+    const ripple = document.createElement('span');
+    ripple.style.cssText = `
+        position: absolute;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        transform: scale(0);
+        animation: ripple 0.6s ease-out;
+        pointer-events: none;
+    `;
+
+    const rect = button.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+
+    button.style.position = 'relative';
+    button.style.overflow = 'hidden';
+    button.appendChild(ripple);
+
+    setTimeout(() => ripple.remove(), 600);
+});
+
+// Add ripple animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes ripple {
+        to {
+            transform: scale(4);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(style);

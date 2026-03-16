@@ -34,6 +34,7 @@ class RichMediaCollector:
         captures: list[RichMediaCapture] = []
         captures.extend(await self._collect_videos(target))
         captures.extend(await self._collect_canvases(target))
+        captures.extend(await self._collect_document_overlay_canvases(target))
         return captures
 
     async def _collect_videos(self, target: Locator) -> list[RichMediaCapture]:
@@ -135,6 +136,71 @@ class RichMediaCollector:
 
         return captures
 
+    async def _collect_document_overlay_canvases(
+        self,
+        target: Locator,
+    ) -> list[RichMediaCapture]:
+        """Collect document-level overlay canvases that visually affect the target."""
+        if self.scope is None:
+            return []
+
+        try:
+            metadata_entries = await target.evaluate(self._document_overlay_media_script())
+        except Exception:
+            self._add_limitation(
+                "Could not inspect document-level overlay canvas elements related to the component."
+            )
+            return []
+
+        captures: list[RichMediaCapture] = []
+        for index, metadata in enumerate(metadata_entries):
+            limitations = list(metadata.get("limitations", []))
+            snapshot_path = None
+            data_url = metadata.get("snapshot_data_url")
+
+            if data_url:
+                snapshot_path = self._save_data_url(
+                    data_url,
+                    f"document_{metadata.get('type', 'canvas')}_{index}",
+                )
+
+            if snapshot_path is None:
+                if limitations:
+                    self._add_limitation(limitations[0])
+                snapshot_path = await self._capture_document_canvas_screenshot(
+                    metadata.get("document_index", index),
+                    metadata.get("type", "canvas"),
+                    index,
+                )
+                if snapshot_path and limitations:
+                    limitations.append(
+                        "Used element screenshot fallback instead of direct canvas export."
+                    )
+
+            linked_selectors = metadata.get("linked_selectors", [])
+            captures.append(
+                RichMediaCapture(
+                    type=RichMediaType(metadata.get("type", "canvas")),
+                    selector=metadata.get(
+                        "selector",
+                        f"canvas.document-overlay:nth-of-type({index + 1})",
+                    ),
+                    bounding_box=self._build_bounding_box(
+                        metadata.get("bounding_box", {})
+                    ),
+                    source_urls=[],
+                    poster_url=None,
+                    snapshot_path=snapshot_path,
+                    playback_flags={},
+                    document_level=True,
+                    linked_selectors=linked_selectors,
+                    effect_summary=self._build_effect_summary(metadata),
+                    limitations=self._dedupe_limitations(limitations),
+                )
+            )
+
+        return captures
+
     async def _capture_element_screenshot(
         self,
         element: Locator,
@@ -150,6 +216,17 @@ class RichMediaCollector:
             return None
 
         return str(path.resolve())
+
+    async def _capture_document_canvas_screenshot(
+        self,
+        document_index: int,
+        media_type: str,
+        index: int,
+    ) -> str | None:
+        """Capture a screenshot for a document-level canvas overlay."""
+        context = self.scope.frame if self.scope is not None else self.page
+        canvas = context.locator("canvas").nth(document_index)
+        return await self._capture_element_screenshot(canvas, media_type, index)
 
     def _save_data_url(self, data_url: str, stem: str) -> str | None:
         """Persist a data URL snapshot to the rich media output directory."""
@@ -185,6 +262,33 @@ class RichMediaCollector:
             width=raw_box.get("width", 0),
             height=raw_box.get("height", 0),
         )
+
+    def _build_effect_summary(self, metadata: dict) -> str | None:
+        """Convert runtime media heuristics into a short, prompt-friendly summary."""
+        linked_selectors = metadata.get("linked_selectors", [])
+        selector_summary = (
+            f" linked to {', '.join(f'`{selector}`' for selector in linked_selectors)}"
+            if linked_selectors
+            else ""
+        )
+
+        if metadata.get("uses_webgl_runtime"):
+            summary = f"Document-level WebGL canvas{selector_summary}"
+            if metadata.get("hides_source_images"):
+                summary += " replaces hidden source images from the DOM"
+            if metadata.get("uses_column_split_runtime"):
+                summary += " by rendering them as split columns"
+            if metadata.get("uses_scroll_runtime"):
+                summary += " and offsets those columns based on viewport scroll velocity"
+            return summary
+
+        if metadata.get("uses_scroll_runtime") and linked_selectors:
+            return (
+                "Document-level canvas overlay appears scroll-linked and references "
+                f"{', '.join(f'`{selector}`' for selector in linked_selectors)}."
+            )
+
+        return None
 
     def _resolve_url(self, url: str) -> str:
         """Resolve a relative media URL within the active extraction scope."""
@@ -341,5 +445,171 @@ class RichMediaCollector:
                     snapshot_data_url: snapshotDataUrl,
                     limitations,
                 };
+            }
+        """
+
+    def _document_overlay_media_script(self) -> str:
+        """Return the JS used to discover overlay canvases outside the target subtree."""
+        return """
+            target => {
+                function buildSelector(element) {
+                    if (element.id) {
+                        return '#' + element.id;
+                    }
+
+                    let selector = element.tagName.toLowerCase();
+                    if (element.className && typeof element.className === 'string') {
+                        const classes = element.className.trim().split(/\\s+/).filter(Boolean);
+                        if (classes.length > 0) {
+                            selector += '.' + classes.slice(0, 2).join('.');
+                        }
+                    }
+
+                    const parent = element.parentElement;
+                    if (!parent) {
+                        return selector;
+                    }
+
+                    const siblings = Array.from(parent.children).filter(
+                        sibling => sibling.tagName === element.tagName
+                    );
+                    if (siblings.length > 1) {
+                        selector += `:nth-of-type(${siblings.indexOf(element) + 1})`;
+                    }
+                    return selector;
+                }
+
+                function intersects(a, b) {
+                    return !(
+                        a.right <= b.left ||
+                        a.left >= b.right ||
+                        a.bottom <= b.top ||
+                        a.top >= b.bottom
+                    );
+                }
+
+                function canvasType(canvas) {
+                    try {
+                        if (
+                            canvas.getContext('webgl2') ||
+                            canvas.getContext('webgl') ||
+                            canvas.getContext('experimental-webgl')
+                        ) {
+                            return 'webgl';
+                        }
+                    } catch (error) {
+                        return 'canvas';
+                    }
+                    return 'canvas';
+                }
+
+                const targetRect = target.getBoundingClientRect();
+                const targetClasses = new Set();
+                [target, ...target.querySelectorAll('[class]')].forEach(node => {
+                    if (!node.className || typeof node.className !== 'string') {
+                        return;
+                    }
+                    node.className
+                        .trim()
+                        .split(/\\s+/)
+                        .filter(Boolean)
+                        .forEach(className => targetClasses.add(`.${className}`));
+                });
+
+                const inlineScriptText = Array.from(document.scripts)
+                    .map(script => script.textContent || '')
+                    .join('\\n');
+
+                const referencedSelectors = Array.from(targetClasses).filter(
+                    selector => inlineScriptText.includes(selector)
+                );
+                const preferredSelectors = referencedSelectors.filter(selector =>
+                    /(webgl|parallax|reveal|scroll|canvas|mask|gl)/i.test(selector)
+                );
+                const linkedSelectors = (
+                    preferredSelectors.length > 0 ? preferredSelectors : referencedSelectors
+                ).slice(0, 8);
+
+                const usesWebglRuntime = (
+                    inlineScriptText.includes('THREE.') ||
+                    inlineScriptText.includes('WebGLRenderer')
+                );
+                const usesScrollRuntime = (
+                    inlineScriptText.includes('window.scrollY') ||
+                    inlineScriptText.includes('ScrollTrigger')
+                );
+                const usesColumnSplitRuntime = (
+                    inlineScriptText.includes('columnsCount') &&
+                    inlineScriptText.includes('mesh.position.y')
+                );
+                const hidesSourceImages = !!target.querySelector(
+                    'img.opacity-0, video.opacity-0, .webgl-img.opacity-0'
+                );
+                const targetHasWebglMarkers = !!target.querySelector('.webgl-measure, .webgl-img');
+
+                return Array.from(document.querySelectorAll('canvas'))
+                    .map((canvas, documentIndex) => {
+                        const rect = canvas.getBoundingClientRect();
+                        const style = getComputedStyle(canvas);
+                        const visible = rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+                        const insideTarget = target.contains(canvas);
+                        const overlayLike = (
+                            ['fixed', 'absolute', 'sticky'].includes(style.position) ||
+                            style.pointerEvents === 'none'
+                        );
+                        const overlapsTarget = intersects(rect, {
+                            left: targetRect.left,
+                            top: targetRect.top,
+                            right: targetRect.right,
+                            bottom: targetRect.bottom,
+                        });
+                        const coversViewport = (
+                            rect.width >= window.innerWidth * 0.6 &&
+                            rect.height >= window.innerHeight * 0.6
+                        );
+
+                        const limitations = [];
+                        let snapshotDataUrl = null;
+                        try {
+                            snapshotDataUrl = canvas.toDataURL('image/png');
+                        } catch (error) {
+                            limitations.push(
+                                'Could not export canvas pixels directly; the canvas may be tainted or GPU-backed.'
+                            );
+                        }
+
+                        return {
+                            selector: buildSelector(canvas),
+                            document_index: documentIndex,
+                            type: canvasType(canvas),
+                            bounding_box: {
+                                x: rect.x,
+                                y: rect.y,
+                                width: rect.width,
+                                height: rect.height,
+                            },
+                            linked_selectors: linkedSelectors,
+                            uses_webgl_runtime: usesWebglRuntime,
+                            uses_scroll_runtime: usesScrollRuntime,
+                            uses_column_split_runtime: usesColumnSplitRuntime,
+                            hides_source_images: hidesSourceImages,
+                            snapshot_data_url: snapshotDataUrl,
+                            limitations,
+                            visible,
+                            inside_target: insideTarget,
+                            overlay_like: overlayLike,
+                            overlaps_target: overlapsTarget,
+                            covers_viewport: coversViewport,
+                            is_candidate: (
+                                visible &&
+                                !insideTarget &&
+                                overlayLike &&
+                                (overlapsTarget || coversViewport) &&
+                                (linkedSelectors.length > 0 || targetHasWebglMarkers) &&
+                                (usesWebglRuntime || usesScrollRuntime)
+                            ),
+                        };
+                    })
+                    .filter(entry => entry.is_candidate);
             }
         """

@@ -10,6 +10,7 @@ from collector.interaction_player import InteractionPlayer
 from collector.library_detector import LibraryDetector
 from collector.rich_media_collector import RichMediaCollector
 from collector.responsive_collector import ResponsiveCollector
+from collector.scroll_probe_collector import ScrollProbeCollector
 from collector.style_extractor import StyleExtractor
 from collector.target_finder import TargetFinder
 
@@ -24,6 +25,7 @@ __all__ = [
     "LibraryDetector",
     "RichMediaCollector",
     "ResponsiveCollector",
+    "ScrollProbeCollector",
     "StyleExtractor",
     "TargetFinder",
 ]

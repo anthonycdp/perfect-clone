@@ -35,6 +35,10 @@ class ResultResponse(BaseModel):
     responsive_rules: list[dict[str, Any]]
     dependencies: list[dict[str, Any]]
     screenshot_path: Optional[str] = None
+    screenshot_url: Optional[str] = None
+    download_url: Optional[str] = None
+    download_filename: Optional[str] = None
+    expires_at: Optional[str] = None
     assets: list[dict[str, Any]]
     full_json: dict[str, Any]
 

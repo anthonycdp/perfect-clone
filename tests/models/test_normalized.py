@@ -8,6 +8,8 @@ from models.normalized import (
     PageInfo,
     TargetInfo,
     DOMTree,
+    ScrollProbeStateChange,
+    ScrollProbeSummary,
     StyleSummary,
     AnimationSummary,
     InteractionSummary,
@@ -259,12 +261,37 @@ class TestAnimationSummary:
             frames_dir="/frames",
             key_frames=[0, 15],
         )
+        scroll_probe = ScrollProbeSummary(
+            context="frame",
+            triggered=True,
+            range_start=100,
+            range_end=500,
+            step_count=8,
+            fps=12,
+            frames_dir="/scroll-probe/frames",
+            video_path="/scroll-probe/recording.webm",
+            key_frames=[0, 3, 7],
+            tracked_selectors=["__target__", ".probe-img"],
+            overlay_selectors=["canvas"],
+            observations=["Probe confirmed scroll-linked opacity changes."],
+            state_changes=[
+                ScrollProbeStateChange(
+                    selector=".probe-img",
+                    property_changes={"opacity": {"first": "0", "last": "1"}},
+                    first_changed_step=1,
+                    peak_changed_step=7,
+                    notes=["Opacity changed during viewport scroll."],
+                )
+            ],
+            limitations=[],
+        )
 
         animation_summary = AnimationSummary(
             css_animations=[animation],
             css_transitions=[transition],
             scroll_effects=["parallax"],
             recording=recording,
+            scroll_probe=scroll_probe,
         )
 
         assert len(animation_summary.css_animations) == 1
@@ -272,6 +299,7 @@ class TestAnimationSummary:
         assert len(animation_summary.css_transitions) == 1
         assert animation_summary.scroll_effects == ["parallax"]
         assert animation_summary.recording.video_path == "/video.mp4"
+        assert animation_summary.scroll_probe.video_path == "/scroll-probe/recording.webm"
 
     def test_animation_summary_with_empty_lists(self):
         """AnimationSummary should work with empty animation lists."""

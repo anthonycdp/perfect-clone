@@ -1,13 +1,16 @@
 """Tests for DOMExtractor shadow DOM serialization."""
 
-from playwright.sync_api import Page
+import pytest
+from playwright.async_api import Page
 
 from collector.dom_extractor import DOMExtractor
 
+pytestmark = pytest.mark.asyncio
 
-def test_extract_includes_open_shadow_root(page: Page) -> None:
+
+async def test_extract_includes_open_shadow_root(page: Page) -> None:
     """DOM extraction should serialize open shadow subtrees under the host element."""
-    page.set_content(
+    await page.set_content(
         """
         <html>
           <body>
@@ -28,7 +31,7 @@ def test_extract_includes_open_shadow_root(page: Page) -> None:
         """
     )
 
-    result = DOMExtractor(page).extract(page.locator("#target"))
+    result = await DOMExtractor(page).extract(page.locator("#target"))
     host_node = result["dom_tree"]["children"][0]
     shadow_root = host_node["shadow_root"]
 

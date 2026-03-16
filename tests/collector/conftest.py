@@ -11,46 +11,25 @@ while project_root in sys.path:
     sys.path.remove(project_root)
 sys.path.insert(0, project_root)
 
-import pytest
-from playwright.sync_api import Page
+import pytest_asyncio
+from playwright.async_api import Page
 
 from collector.browser import BrowserManager
 
 
-def pytest_configure(config):
-    """Disable asyncio and anyio plugins for collector tests.
-
-    Playwright sync API cannot run inside an asyncio event loop,
-    so we need to disable these plugins for browser tests.
-    """
-    config.pluginmanager.set_blocked("asyncio")
-    config.pluginmanager.set_blocked("anyio")
-
-
-@pytest.fixture(scope="session")
-def browser():
-    """Create and cleanup browser for tests.
-
-    Uses session scope to avoid event loop conflicts between tests.
-    Playwright sync API creates an event loop that persists across tests,
-    so we reuse the same browser instance throughout the session.
-    """
+@pytest_asyncio.fixture
+async def browser():
+    """Create and cleanup a shared async browser manager for collector tests."""
     manager = BrowserManager(headless=True)
-    manager.start()
+    await manager.start()
     yield manager
-    manager.close()
+    await manager.close()
 
 
-@pytest.fixture
-def page(browser: BrowserManager) -> Page:
-    """Create a new page for each test.
-
-    Creates a fresh page (tab) for each test to ensure isolation
-    while reusing the same browser instance.
-    """
-    # Create a new page for this test
-    new_page = browser.browser.new_page()
-    # Navigate to example.com for tests
-    new_page.goto("https://example.com", wait_until="networkidle")
+@pytest_asyncio.fixture
+async def page(browser: BrowserManager) -> Page:
+    """Create a fresh async page for each collector test."""
+    new_page = await browser.browser.new_page()
+    await new_page.goto("https://example.com", wait_until="networkidle")
     yield new_page
-    new_page.close()
+    await new_page.close()

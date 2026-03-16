@@ -1,14 +1,17 @@
 """Tests for StyleExtractor frame-aware behavior."""
 
-from playwright.sync_api import Page
+import pytest
+from playwright.async_api import Page
 
 from collector.extraction_scope import ExtractionScope
 from collector.style_extractor import StyleExtractor
 
+pytestmark = pytest.mark.asyncio
 
-def test_extract_reads_keyframes_from_target_frame(page: Page) -> None:
+
+async def test_extract_reads_keyframes_from_target_frame(page: Page) -> None:
     """Style extraction should inspect the target frame stylesheets when present."""
-    page.set_content(
+    await page.set_content(
         """
         <html>
           <body>
@@ -43,10 +46,10 @@ def test_extract_reads_keyframes_from_target_frame(page: Page) -> None:
         frame_url=frame.url,
         frame_name=frame.name or None,
         same_origin_accessible=True,
-        document_base_url=target.evaluate("el => document.baseURI"),
+        document_base_url=await target.evaluate("el => document.baseURI"),
     )
 
-    result = StyleExtractor(page).extract(target, scope=scope)
+    result = await StyleExtractor(page).extract(target, scope=scope)
 
     assert "pulse" in result["keyframes"]
     assert result["limitations"] == []

@@ -5,11 +5,13 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page
+from playwright.async_api import Page
 
 from collector.asset_downloader import AssetDownloader
 from collector.extraction_scope import ExtractionScope
 from models.extraction import AssetType
+
+pytestmark = pytest.mark.asyncio
 
 
 PNG_DATA_URL = (
@@ -50,7 +52,7 @@ class TestAssetDownloader:
         """Stub network downloads so tests can assert URLs deterministically."""
         downloads: list[tuple[str, str]] = []
 
-        def fake_download_file(url: str, subfolder: str) -> tuple[str, int, str]:
+        async def fake_download_file(url: str, subfolder: str) -> tuple[str, int, str]:
             filename = f"asset_{len(downloads)}"
             extension = ".svg" if "svg" in url else ".bin"
             local_dir = Path(temp_dir) / subfolder
@@ -64,33 +66,33 @@ class TestAssetDownloader:
         monkeypatch.setattr(downloader, "_download_file", fake_download_file)
         return downloads
 
-    def test_download_all_returns_list(
+    async def test_download_all_returns_list(
         self, downloader: AssetDownloader, page: Page
     ) -> None:
         """download_all() should return a list of Asset objects."""
         target = page.locator("body")
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         assert isinstance(result, list)
 
-    def test_download_all_finds_images(
+    async def test_download_all_finds_images(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should find and download images."""
         # Create a page with an image
-        page.set_content('<html><body><img src="https://example.com/images/test.png"></body></html>')
+        await page.set_content('<html><body><img src="https://example.com/images/test.png"></body></html>')
         target = page.locator("body")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         # Check if any images were found (might be empty if image fails to load)
         assert isinstance(result, list)
 
-    def test_download_all_finds_svgs(
+    async def test_download_all_finds_svgs(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should find and download inline SVGs."""
-        page.set_content("""
+        await page.set_content("""
             <html><body>
                 <svg width="100" height="100">
                     <circle cx="50" cy="50" r="40" fill="red"/>
@@ -99,17 +101,17 @@ class TestAssetDownloader:
         """)
         target = page.locator("body")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         # Should find the SVG
         svg_assets = [a for a in result if a.type == AssetType.SVG]
         assert len(svg_assets) > 0
 
-    def test_download_all_asset_has_required_fields(
+    async def test_download_all_asset_has_required_fields(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() assets should have required fields."""
-        page.set_content("""
+        await page.set_content("""
             <html><body>
                 <svg width="100" height="100">
                     <circle cx="50" cy="50" r="40" fill="red"/>
@@ -118,7 +120,7 @@ class TestAssetDownloader:
         """)
         target = page.locator("body")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         if result:
             asset = result[0]
@@ -132,11 +134,11 @@ class TestAssetDownloader:
             assert asset.local_path is not None
             assert asset.file_size_bytes >= 0
 
-    def test_download_all_saves_to_output_dir(
+    async def test_download_all_saves_to_output_dir(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should save files to output directory."""
-        page.set_content("""
+        await page.set_content("""
             <html><body>
                 <svg width="100" height="100">
                     <circle cx="50" cy="50" r="40" fill="red"/>
@@ -145,18 +147,18 @@ class TestAssetDownloader:
         """)
         target = page.locator("body")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         if result:
             # Check that local_path is within temp_dir
             for asset in result:
                 assert temp_dir in asset.local_path or asset.local_path.startswith("/")
 
-    def test_download_all_handles_external_svgs(
+    async def test_download_all_handles_external_svgs(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should handle external SVG files."""
-        page.set_content("""
+        await page.set_content("""
             <html><body>
                 <img src="https://example.com/icon.svg">
             </body></html>
@@ -164,14 +166,14 @@ class TestAssetDownloader:
         target = page.locator("body")
 
         # Should not raise
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
         assert isinstance(result, list)
 
-    def test_download_all_scoped_to_target(
+    async def test_download_all_scoped_to_target(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should only find assets within target."""
-        page.set_content("""
+        await page.set_content("""
             <html><body>
                 <div id="first"><img src="image1.png"></div>
                 <div id="second"><img src="image2.png"></div>
@@ -179,17 +181,17 @@ class TestAssetDownloader:
         """)
         target = page.locator("#first")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         # Should only find image1.png (though external images may not download)
         # The important thing is it doesn't find assets outside target
         assert isinstance(result, list)
 
-    def test_download_all_handles_fonts(
+    async def test_download_all_handles_fonts(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should detect and download fonts."""
-        page.set_content("""
+        await page.set_content("""
             <html><head>
                 <style>
                     @font-face {
@@ -201,29 +203,29 @@ class TestAssetDownloader:
         """)
         target = page.locator("html")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         # Check for font assets (may or may not find depending on network)
         font_assets = [a for a in result if a.type == AssetType.FONT]
         # Just verify it returns without error
         assert isinstance(result, list)
 
-    def test_download_all_handles_no_assets(
+    async def test_download_all_handles_no_assets(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should handle elements with no assets."""
-        page.set_content('<html><body><p>Just text</p></body></html>')
+        await page.set_content('<html><body><p>Just text</p></body></html>')
         target = page.locator("body")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         assert result == []
 
-    def test_download_all_dimensions_for_images(
+    async def test_download_all_dimensions_for_images(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should include dimensions for images when available."""
-        page.set_content("""
+        await page.set_content("""
             <html><body>
                 <svg width="100" height="100">
                     <circle cx="50" cy="50" r="40" fill="red"/>
@@ -232,29 +234,29 @@ class TestAssetDownloader:
         """)
         target = page.locator("body")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         # SVGs should have dimensions
         svg_assets = [a for a in result if a.type == AssetType.SVG]
         if svg_assets:
             assert svg_assets[0].dimensions is not None
 
-    def test_download_all_uses_lazy_image_attributes(
+    async def test_download_all_uses_lazy_image_attributes(
         self, downloader: AssetDownloader, page: Page, temp_dir: str
     ) -> None:
         """download_all() should read lazy-loading image attributes such as data-src."""
-        page.set_content("""
+        await page.set_content("""
             <html><body>
                 <img data-src="https://example.com/lazy-image.png">
             </body></html>
         """)
         target = page.locator("body")
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
 
         assert isinstance(result, list)
 
-    def test_asset_downloader_creates_output_dir(
+    async def test_asset_downloader_creates_output_dir(
         self, page: Page, temp_dir: str
     ) -> None:
         """AssetDownloader should create output directory if it doesn't exist."""
@@ -264,7 +266,7 @@ class TestAssetDownloader:
         # Directory should be created (or at least not raise)
         assert downloader.output_dir == new_dir
 
-    def test_download_all_finds_css_background_image(
+    async def test_download_all_finds_css_background_image(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -273,7 +275,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should include background-image assets from CSS."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <div id="target" style="background-image: url('{PNG_DATA_URL}')"></div>
@@ -281,12 +283,12 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert any(asset.original_url == PNG_DATA_URL for asset in result)
         assert downloads == [(PNG_DATA_URL, "images")]
 
-    def test_download_all_finds_background_shorthand_urls(
+    async def test_download_all_finds_background_shorthand_urls(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -295,7 +297,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should capture URLs from background shorthand styles."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <div id="target" style="background: url('{PNG_DATA_URL}') center / cover no-repeat;"></div>
@@ -303,12 +305,12 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 1
         assert downloads == [(PNG_DATA_URL, "images")]
 
-    def test_download_all_finds_multiple_css_urls(
+    async def test_download_all_finds_multiple_css_urls(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -317,7 +319,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should download every distinct CSS URL in a value."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <div
@@ -328,7 +330,7 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 2
         assert downloads == [
@@ -336,7 +338,7 @@ class TestAssetDownloader:
             (PNG_DATA_URL_ALT, "images"),
         ]
 
-    def test_download_all_finds_pseudo_element_backgrounds(
+    async def test_download_all_finds_pseudo_element_backgrounds(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -345,7 +347,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should include backgrounds from ::before and ::after."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html>
                 <head>
@@ -372,7 +374,7 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
         asset_types = {asset.original_url: asset.type for asset in result}
 
         assert len(result) == 2
@@ -383,13 +385,13 @@ class TestAssetDownloader:
         assert asset_types[PNG_DATA_URL] == AssetType.IMAGE
         assert asset_types[SVG_DATA_URL] == AssetType.SVG
 
-    def test_download_all_ignores_gradients_without_urls(
+    async def test_download_all_ignores_gradients_without_urls(
         self,
         downloader: AssetDownloader,
         page: Page,
     ) -> None:
         """download_all() should ignore CSS gradients that contain no asset URLs."""
-        page.set_content(
+        await page.set_content(
             """
             <html><body>
                 <div id="target" style="background-image: linear-gradient(red, blue)"></div>
@@ -397,11 +399,11 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert result == []
 
-    def test_download_all_deduplicates_html_and_css_assets(
+    async def test_download_all_deduplicates_html_and_css_assets(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -410,7 +412,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should not download the same URL twice across HTML and CSS."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <img src="{PNG_DATA_URL}">
@@ -419,12 +421,12 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("body"))
+        result = await downloader.download_all(page.locator("body"))
 
         assert len(result) == 1
         assert downloads == [(PNG_DATA_URL, "images")]
 
-    def test_download_all_resolves_relative_css_urls_from_document_base(
+    async def test_download_all_resolves_relative_css_urls_from_document_base(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -433,7 +435,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should resolve relative CSS URLs against document.baseURI."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             """
             <html>
                 <head><base href="https://assets.example.com/landing/"></head>
@@ -444,14 +446,14 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 1
         assert downloads == [
             ("https://assets.example.com/landing/images/hero-bg.png", "images")
         ]
 
-    def test_download_all_scopes_css_assets_to_target(
+    async def test_download_all_scopes_css_assets_to_target(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -460,7 +462,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should ignore CSS assets outside the target subtree."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <div id="target" style="background-image: url('{PNG_DATA_URL}')"></div>
@@ -469,16 +471,16 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 1
         assert downloads == [(PNG_DATA_URL, "images")]
 
-    def test_download_all_saves_percent_encoded_svg_data_urls(
+    async def test_download_all_saves_percent_encoded_svg_data_urls(
         self, downloader: AssetDownloader, page: Page
     ) -> None:
         """download_all() should persist SVG data URLs used in CSS backgrounds."""
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <div id="target" style="background-image: url('{SVG_DATA_URL}')"></div>
@@ -486,20 +488,20 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 1
         assert result[0].type == AssetType.SVG
         assert Path(result[0].local_path).exists()
 
-    def test_download_all_extracts_fonts_from_target_frame(
+    async def test_download_all_extracts_fonts_from_target_frame(
         self,
         page: Page,
         temp_dir: str,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """download_all() should inspect @font-face rules in the target frame."""
-        page.set_content(
+        await page.set_content(
             """
             <html>
               <body>
@@ -530,18 +532,18 @@ class TestAssetDownloader:
             frame_url=frame.url,
             frame_name=frame.name or None,
             same_origin_accessible=True,
-            document_base_url=target.evaluate("el => document.baseURI"),
+            document_base_url=await target.evaluate("el => document.baseURI"),
         )
         downloader = AssetDownloader(page, temp_dir, scope=scope)
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
 
-        result = downloader.download_all(target)
+        result = await downloader.download_all(target)
         font_assets = [asset for asset in result if asset.type == AssetType.FONT]
 
         assert len(font_assets) == 1
         assert downloads[-1] == ("https://cdn.example.com/frame-font.woff2", "fonts")
 
-    def test_download_all_finds_mask_image_assets(
+    async def test_download_all_finds_mask_image_assets(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -550,7 +552,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should capture CSS mask-image URLs."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <div id="target" style="mask-image: url('{PNG_DATA_URL}')"></div>
@@ -558,12 +560,12 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 1
         assert downloads == [(PNG_DATA_URL, "images")]
 
-    def test_download_all_finds_border_image_source_assets(
+    async def test_download_all_finds_border_image_source_assets(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -572,7 +574,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should capture border-image-source URLs."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html><body>
                 <div
@@ -583,12 +585,12 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 1
         assert downloads == [(PNG_DATA_URL_ALT, "images")]
 
-    def test_download_all_finds_content_url_assets(
+    async def test_download_all_finds_content_url_assets(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -597,7 +599,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should capture url(...) used in CSS content properties."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             f"""
             <html>
                 <head>
@@ -612,13 +614,13 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("#target"))
+        result = await downloader.download_all(page.locator("#target"))
 
         assert len(result) == 1
         assert result[0].type == AssetType.SVG
         assert downloads == [(SVG_DATA_URL, "svgs")]
 
-    def test_download_all_downloads_video_sources(
+    async def test_download_all_downloads_video_sources(
         self,
         downloader: AssetDownloader,
         page: Page,
@@ -627,7 +629,7 @@ class TestAssetDownloader:
     ) -> None:
         """download_all() should download video src and source assets as VIDEO."""
         downloads = self._stub_download_file(downloader, monkeypatch, temp_dir)
-        page.set_content(
+        await page.set_content(
             """
             <html><body>
                 <video id="demo" src="https://cdn.example.com/video.mp4" controls>
@@ -637,7 +639,7 @@ class TestAssetDownloader:
             """
         )
 
-        result = downloader.download_all(page.locator("body"))
+        result = await downloader.download_all(page.locator("body"))
         video_assets = [asset for asset in result if asset.type == AssetType.VIDEO]
 
         assert len(video_assets) == 2

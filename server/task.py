@@ -1,6 +1,9 @@
 """Task management for extraction operations."""
 
 import asyncio
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from models.requests import ExtractionRequest, ProgressEvent
 
@@ -12,16 +15,21 @@ class ExtractionTask:
         self.id = task_id
         self.request = request
         self.progress_queue: asyncio.Queue = asyncio.Queue()
-        self.result = None
+        self.result: dict[str, Any] | None = None
         self.completed = False
         self.cancelled = False
         self.error: str | None = None
+        self.workspace_dir: Path | None = None
+        self.package_path: Path | None = None
+        self.package_filename: str | None = None
+        self.expires_at: datetime | None = None
+        self.downloaded_at: datetime | None = None
 
     async def progress_generator(self):
         """Yield progress events for SSE stream."""
         while True:
             progress_json = await self.progress_queue.get()
-            yield progress_json
+            yield f"data: {progress_json}\n\n"
             if '"done": true' in progress_json or '"done":true' in progress_json:
                 break
 

@@ -3,7 +3,7 @@
 from typing import Any
 
 from models.extraction import AnimationData, TransitionData
-from models.normalized import AnimationSummary
+from models.normalized import AnimationSummary, ScrollProbeSummary
 
 
 class AnimationTransformer:
@@ -14,9 +14,16 @@ class AnimationTransformer:
         animations: list[dict],
         transitions: list[dict],
         keyframes: dict,
+        observed_scroll_effects: list[str] | None = None,
         recording: dict | None = None,
+        scroll_probe: ScrollProbeSummary | None = None,
     ) -> AnimationSummary:
         """Transform animation data into AnimationSummary."""
+        scroll_effects = self._detect_scroll_effects(keyframes)
+        for effect in observed_scroll_effects or []:
+            if effect and effect not in scroll_effects:
+                scroll_effects.append(effect)
+
         return AnimationSummary(
             css_animations=[
                 AnimationData(**anim) for anim in animations
@@ -24,8 +31,9 @@ class AnimationTransformer:
             css_transitions=[
                 TransitionData(**trans) for trans in transitions
             ],
-            scroll_effects=self._detect_scroll_effects(keyframes),
+            scroll_effects=scroll_effects,
             recording=recording,
+            scroll_probe=scroll_probe,
         )
 
     def _detect_scroll_effects(self, keyframes: dict) -> list[str]:
