@@ -25,14 +25,14 @@ server/static/
 
 ## Chunk 1: HTML Structure
 
-### Task 1: Restructure index.html for wizard layout
+### Task 1: Add wizard container and Steps 1-2
 
 **Files:**
 - Modify: `server/static/index.html`
 
-- [ ] **Step 1: Replace two-panel layout with wizard container**
+- [ ] **Step 1: Add DOCTYPE and header**
 
-Replace the entire `<main>` section with wizard structure:
+Replace beginning of file with:
 
 ```html
 <!DOCTYPE html>
@@ -50,90 +50,132 @@ Replace the entire `<main>` section with wizard structure:
     </header>
 
     <main class="wizard-container">
-        <!-- Wizard Card -->
         <div class="wizard-card">
+```
+
+- [ ] **Step 2: Add Step 1 (URL input)**
+
+Add after wizard-card div:
+
+```html
             <!-- Step 1: URL -->
             <div class="wizard-step" data-step="1" aria-label="Passo 1 de 4">
                 <span class="step-indicator">1 de 4</span>
-                <h2 class="step-title">Qual site você quer extrair?</h2>
+                <h2 class="step-title">Qual site voce quer extrair?</h2>
                 <div class="form-group">
                     <input type="url" id="url" placeholder="https://exemplo.com" aria-label="URL do site">
                     <span class="error-message" id="url-error"></span>
                 </div>
                 <div class="wizard-actions">
-                    <button class="btn-primary" id="btn-next-1">Continuar →</button>
+                    <button class="btn-primary" id="btn-next-1">Continuar</button>
                 </div>
             </div>
+```
 
+- [ ] **Step 3: Add Step 2 (Mode selection)**
+
+Add after Step 1:
+
+```html
             <!-- Step 2: Mode -->
             <div class="wizard-step hidden" data-step="2" aria-label="Passo 2 de 4">
                 <span class="step-indicator">2 de 4</span>
-                <h2 class="step-title">O que você quer extrair?</h2>
-                <div class="radio-cards" role="radiogroup" aria-label="Modo de extração">
+                <h2 class="step-title">O que voce quer extrair?</h2>
+                <div class="radio-cards" role="radiogroup" aria-label="Modo de extracao">
                     <div class="radio-card selected" data-value="component" role="radio" aria-checked="true" tabindex="0">
                         <div class="radio-card-header">
                             <span class="radio-indicator"></span>
-                            <span class="radio-label">Componente único</span>
+                            <span class="radio-label">Componente unico</span>
                         </div>
-                        <p class="radio-card-description">Um elemento específico da página</p>
+                        <p class="radio-card-description">Um elemento especifico da pagina</p>
                     </div>
                     <div class="radio-card" data-value="full_page" role="radio" aria-checked="false" tabindex="0">
                         <div class="radio-card-header">
                             <span class="radio-indicator"></span>
                             <span class="radio-label">Landing Page completa</span>
                         </div>
-                        <p class="radio-card-description">Toda a página inicial</p>
+                        <p class="radio-card-description">Toda a pagina inicial</p>
                     </div>
                 </div>
                 <div class="wizard-actions">
-                    <button class="btn-secondary" id="btn-back-2">← Voltar</button>
-                    <button class="btn-primary" id="btn-next-2">Continuar →</button>
+                    <button class="btn-secondary" id="btn-back-2">Voltar</button>
+                    <button class="btn-primary" id="btn-next-2">Continuar</button>
                 </div>
             </div>
+```
 
+- [ ] **Step 4: Commit HTML Steps 1-2**
+
+```bash
+git add server/static/index.html
+git commit -m "feat(ui): add wizard steps 1-2 HTML structure"
+```
+
+### Task 2: Add Steps 3-4 and state views
+
+**Files:**
+- Modify: `server/static/index.html`
+
+- [ ] **Step 1: Add Step 3 (Strategy selection)**
+
+Add after Step 2:
+
+```html
             <!-- Step 3: Strategy -->
             <div class="wizard-step hidden" data-step="3" aria-label="Passo 3 de 4">
                 <span class="step-indicator">3 de 4</span>
                 <h2 class="step-title">Como encontrar o componente?</h2>
-                <div class="radio-cards strategy-cards" role="radiogroup" aria-label="Estratégia de busca">
+                <div class="radio-cards strategy-cards" role="radiogroup" aria-label="Estrategia de busca">
                     <div class="radio-card" data-value="css" role="radio" aria-checked="false" tabindex="0">
                         <span class="radio-label">CSS</span>
                         <span class="radio-card-hint">Seletor CSS</span>
                     </div>
                     <div class="radio-card" data-value="xpath" role="radio" aria-checked="false" tabindex="0">
                         <span class="radio-label">XPath</span>
-                        <span class="radio-card-hint">Expressão XPath</span>
+                        <span class="radio-card-hint">Expressao XPath</span>
                     </div>
                     <div class="radio-card selected" data-value="text" role="radio" aria-checked="true" tabindex="0">
                         <span class="radio-label">Texto</span>
-                        <span class="radio-card-hint">Buscar por texto visível</span>
+                        <span class="radio-card-hint">Buscar por texto visivel</span>
                     </div>
                     <div class="radio-card" data-value="html_snippet" role="radio" aria-checked="false" tabindex="0">
                         <span class="radio-label">HTML</span>
                         <span class="radio-card-hint">Trecho de HTML</span>
                     </div>
                 </div>
-                <p class="strategy-description" id="strategy-description">Buscar por texto visível na página</p>
+                <p class="strategy-description" id="strategy-description">Buscar por texto visivel na pagina</p>
                 <div class="wizard-actions">
-                    <button class="btn-secondary" id="btn-back-3">← Voltar</button>
-                    <button class="btn-primary" id="btn-next-3">Continuar →</button>
+                    <button class="btn-secondary" id="btn-back-3">Voltar</button>
+                    <button class="btn-primary" id="btn-next-3">Continuar</button>
                 </div>
             </div>
+```
 
+- [ ] **Step 2: Add Step 4 (Query + Execute)**
+
+Add after Step 3:
+
+```html
             <!-- Step 4: Query + Execute -->
             <div class="wizard-step hidden" data-step="4" aria-label="Passo 4 de 4">
                 <span class="step-indicator">4 de 4</span>
-                <h2 class="step-title">O que você quer buscar?</h2>
+                <h2 class="step-title">O que voce quer buscar?</h2>
                 <div class="form-group">
-                    <textarea id="query" rows="3" placeholder="Digite o texto do botão, título ou elemento..." aria-label="Query de busca"></textarea>
+                    <textarea id="query" rows="3" placeholder="Digite o texto do botao, titulo ou elemento..." aria-label="Query de busca"></textarea>
                     <span class="error-message" id="query-error"></span>
                 </div>
                 <div class="wizard-actions">
-                    <button class="btn-secondary" id="btn-back-4">← Voltar</button>
-                    <button class="btn-primary" id="btn-extract">🚀 Extrair</button>
+                    <button class="btn-secondary" id="btn-back-4">Voltar</button>
+                    <button class="btn-primary" id="btn-extract">Extrair</button>
                 </div>
             </div>
+```
 
+- [ ] **Step 3: Add Progress state**
+
+Add after Step 4:
+
+```html
             <!-- Progress State -->
             <div class="wizard-step hidden" data-state="progress" aria-label="Extraindo">
                 <h2 class="step-title centered">Extraindo...</h2>
@@ -148,23 +190,35 @@ Replace the entire `<main>` section with wizard structure:
                     <button class="btn-danger" id="btn-cancel">Cancelar</button>
                 </div>
             </div>
+```
 
+- [ ] **Step 4: Add Error state**
+
+Add after Progress state:
+
+```html
             <!-- Error State -->
             <div class="wizard-step hidden" data-state="error" aria-label="Erro">
-                <div class="error-icon">⚠</div>
+                <div class="error-icon">!</div>
                 <h2 class="step-title centered">Erro</h2>
                 <p class="error-text" id="error-text"></p>
                 <div class="wizard-actions centered">
-                    <button class="btn-secondary" id="btn-back-error">← Voltar</button>
+                    <button class="btn-secondary" id="btn-back-error">Voltar</button>
                     <button class="btn-primary" id="btn-retry">Tentar Novamente</button>
                 </div>
             </div>
+```
 
+- [ ] **Step 5: Add Result state**
+
+Add after Error state:
+
+```html
             <!-- Result State -->
             <div class="wizard-step hidden" data-state="result">
                 <div class="result-header">
-                    <span class="success-icon">✓</span>
-                    <h2 class="step-title">Extração concluída!</h2>
+                    <span class="success-icon">ok</span>
+                    <h2 class="step-title">Extracao concluida!</h2>
                 </div>
                 <div class="tabs">
                     <button class="tab active" data-tab="prompt" aria-selected="true">Prompt</button>
@@ -187,10 +241,16 @@ Replace the entire `<main>` section with wizard structure:
                     <ul id="assets-list"></ul>
                 </div>
                 <div class="wizard-actions">
-                    <button class="btn-secondary" id="btn-new-extraction">← Nova Extração</button>
+                    <button class="btn-secondary" id="btn-new-extraction">Nova Extracao</button>
                 </div>
             </div>
+```
 
+- [ ] **Step 6: Add Progress Dots and close tags**
+
+Add after Result state:
+
+```html
             <!-- Progress Dots -->
             <div class="wizard-dots" aria-label="Progresso do wizard">
                 <span class="dot active" data-dot="1" aria-label="Passo 1" aria-current="step"></span>
@@ -208,31 +268,55 @@ Replace the entire `<main>` section with wizard structure:
 </html>
 ```
 
-- [ ] **Step 2: Commit HTML changes**
+- [ ] **Step 7: Commit HTML Steps 3-4 and states**
 
 ```bash
 git add server/static/index.html
-git commit -m "feat(ui): restructure HTML for wizard layout"
+git commit -m "feat(ui): add wizard steps 3-4 and state views"
 ```
 
 ---
 
 ## Chunk 2: CSS Styles
 
-### Task 2: Add wizard CSS styles
+### Task 3: Add base wizard CSS
 
 **Files:**
 - Modify: `server/static/styles.css`
 
-- [ ] **Step 1: Add wizard container and card styles**
+- [ ] **Step 1: Add CSS variables (including --success)**
 
-Add to `styles.css`:
+Add at the top of styles.css or update existing `:root`:
 
 ```css
-/* ========================================
-   Wizard Layout
-   ======================================== */
+/* CSS Variables */
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --text-primary: #eaeaea;
+    --text-secondary: #a0a0a0;
+    --accent: #e94560;
+    --accent-hover: #ff6b6b;
+    --border: #2a2a4a;
+    --success: #4ade80;
+    --error: #f87171;
+}
 
+[data-theme="light"] {
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e9ecef;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --border: #dee2e6;
+}
+```
+
+- [ ] **Step 2: Add wizard container and card styles**
+
+```css
+/* Wizard Layout */
 .wizard-container {
     display: flex;
     align-items: center;
@@ -250,11 +334,12 @@ Add to `styles.css`:
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
     position: relative;
 }
+```
 
-/* ========================================
-   Wizard Steps
-   ======================================== */
+- [ ] **Step 3: Add wizard step styles**
 
+```css
+/* Wizard Steps */
 .wizard-step {
     animation: fadeIn 0.25s ease-out;
 }
@@ -268,20 +353,12 @@ Add to `styles.css`:
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .wizard-step {
-        animation: none;
-    }
+    .wizard-step { animation: none; }
 }
 
 /* Slide transitions */
@@ -294,31 +371,37 @@ Add to `styles.css`:
 }
 
 @keyframes slideLeft {
-    from {
-        opacity: 0;
-        transform: translateX(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes slideRight {
-    from {
-        opacity: 0;
-        transform: translateX(-30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
-/* ========================================
-   Step Indicator & Title
-   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+    .wizard-step.slide-left,
+    .wizard-step.slide-right { animation: none; }
+}
+```
 
+- [ ] **Step 4: Commit base wizard CSS**
+
+```bash
+git add server/static/styles.css
+git commit -m "feat(ui): add base wizard CSS styles"
+```
+
+### Task 4: Add form and button styles
+
+**Files:**
+- Modify: `server/static/styles.css`
+
+- [ ] **Step 1: Add step indicator and title styles**
+
+```css
+/* Step Indicator & Title */
 .step-indicator {
     display: block;
     font-size: 0.875rem;
@@ -332,11 +415,12 @@ Add to `styles.css`:
     margin-bottom: 1.5rem;
     color: var(--text-primary);
 }
+```
 
-/* ========================================
-   Form Elements
-   ======================================== */
+- [ ] **Step 2: Add form group styles**
 
+```css
+/* Form Elements */
 .form-group {
     margin-bottom: 1rem;
 }
@@ -372,11 +456,93 @@ Add to `styles.css`:
     margin-top: 0.5rem;
     min-height: 1.25rem;
 }
+```
 
-/* ========================================
-   Radio Cards
-   ======================================== */
+- [ ] **Step 3: Add button styles**
 
+```css
+/* Buttons */
+.btn-primary {
+    padding: 0.75rem 1.5rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+.btn-danger {
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    color: var(--error);
+    border: 1px solid var(--error);
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-danger:hover {
+    background: var(--error);
+    color: white;
+}
+
+.btn-copy {
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-copy:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+```
+
+- [ ] **Step 4: Commit form and button styles**
+
+```bash
+git add server/static/styles.css
+git commit -m "feat(ui): add form elements and button styles"
+```
+
+### Task 5: Add radio card styles
+
+**Files:**
+- Modify: `server/static/styles.css`
+
+- [ ] **Step 1: Add radio cards styles**
+
+```css
+/* Radio Cards */
 .radio-cards {
     display: flex;
     flex-direction: column;
@@ -474,10 +640,6 @@ Add to `styles.css`:
     font-size: 0.875rem;
 }
 
-/* ========================================
-   Strategy Description
-   ======================================== */
-
 .strategy-description {
     font-size: 0.875rem;
     color: var(--text-secondary);
@@ -486,103 +648,24 @@ Add to `styles.css`:
     background: var(--bg-tertiary);
     border-radius: 6px;
 }
+```
 
-/* ========================================
-   Wizard Actions
-   ======================================== */
+- [ ] **Step 2: Commit radio card styles**
 
-.wizard-actions {
-    display: flex;
-    gap: 0.75rem;
-    margin-top: 1.5rem;
-    justify-content: flex-end;
-}
+```bash
+git add server/static/styles.css
+git commit -m "feat(ui): add radio card component styles"
+```
 
-.wizard-actions.centered {
-    justify-content: center;
-}
+### Task 6: Add progress, error, and result styles
 
-/* ========================================
-   Buttons
-   ======================================== */
+**Files:**
+- Modify: `server/static/styles.css`
 
-.btn-primary {
-    padding: 0.75rem 1.5rem;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
-}
+- [ ] **Step 1: Add progress bar styles**
 
-.btn-primary:hover {
-    background: var(--accent-hover);
-}
-
-.btn-primary:active {
-    transform: scale(0.98);
-}
-
-.btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.btn-secondary {
-    padding: 0.75rem 1.5rem;
-    background: transparent;
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-secondary:hover {
-    border-color: var(--text-secondary);
-    color: var(--text-primary);
-}
-
-.btn-danger {
-    padding: 0.75rem 1.5rem;
-    background: transparent;
-    color: var(--error);
-    border: 1px solid var(--error);
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-danger:hover {
-    background: var(--error);
-    color: white;
-}
-
-.btn-copy {
-    padding: 0.5rem 1rem;
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-copy:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-}
-
-/* ========================================
-   Progress
-   ======================================== */
-
+```css
+/* Progress */
 .progress-container {
     margin: 1.5rem 0;
 }
@@ -614,25 +697,37 @@ Add to `styles.css`:
     color: var(--text-secondary);
     font-size: 0.875rem;
 }
+```
 
-/* ========================================
-   Error State
-   ======================================== */
+- [ ] **Step 2: Add error state styles**
 
+```css
+/* Error State */
 .error-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--error);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0 auto 1rem;
 }
 
 .error-text {
+    text-align: center;
     color: var(--text-secondary);
     margin-bottom: 1.5rem;
 }
+```
 
-/* ========================================
-   Result State
-   ======================================== */
+- [ ] **Step 3: Add result state styles**
 
+```css
+/* Result State */
 .result-header {
     display: flex;
     align-items: center;
@@ -641,8 +736,16 @@ Add to `styles.css`:
 }
 
 .success-icon {
-    font-size: 1.5rem;
-    color: var(--success);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--success);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: bold;
 }
 
 /* Tabs */
@@ -665,9 +768,7 @@ Add to `styles.css`:
     margin-bottom: -1px;
 }
 
-.tab:hover {
-    color: var(--text-primary);
-}
+.tab:hover { color: var(--text-primary); }
 
 .tab.active {
     color: var(--accent);
@@ -681,9 +782,8 @@ Add to `styles.css`:
     overflow-y: auto;
 }
 
-.tab-content.hidden {
-    display: none;
-}
+.tab-content.hidden { display: none; }
+.tab-content.active { display: block; }
 
 /* Screenshot */
 .screenshot-preview {
@@ -734,9 +834,7 @@ Add to `styles.css`:
     font-size: 0.875rem;
 }
 
-#assets-list li:last-child {
-    border-bottom: none;
-}
+#assets-list li:last-child { border-bottom: none; }
 
 /* JSON */
 #json-text {
@@ -746,11 +844,36 @@ Add to `styles.css`:
     font-size: 0.75rem;
     overflow-x: auto;
 }
+```
 
-/* ========================================
-   Progress Dots
-   ======================================== */
+- [ ] **Step 4: Commit progress and result styles**
 
+```bash
+git add server/static/styles.css
+git commit -m "feat(ui): add progress, error, and result state styles"
+```
+
+### Task 7: Add navigation and toast styles
+
+**Files:**
+- Modify: `server/static/styles.css`
+
+- [ ] **Step 1: Add wizard actions and dots styles**
+
+```css
+/* Wizard Actions */
+.wizard-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    justify-content: flex-end;
+}
+
+.wizard-actions.centered {
+    justify-content: center;
+}
+
+/* Progress Dots */
 .wizard-dots {
     display: flex;
     justify-content: center;
@@ -771,19 +894,114 @@ Add to `styles.css`:
 .dot.active {
     background: var(--accent);
 }
+```
 
-/* Hide dots on result/progress/error states */
-.wizard-step[data-state="progress"] ~ .wizard-dots,
-.wizard-step[data-state="result"] ~ .wizard-dots,
-.wizard-step[data-state="error"] ~ .wizard-dots {
-    visibility: hidden;
+- [ ] **Step 2: Add toast notification styles**
+
+```css
+/* Toast Notifications */
+#toast-container {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 1000;
 }
 
-/* ========================================
-   Responsive Design
-   ======================================== */
+.toast {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
 
-/* Tablet (768px - 1024px) */
+.toast.success {
+    background: var(--success);
+    color: white;
+}
+
+.toast.error {
+    background: var(--error);
+    color: white;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast { animation: none; }
+}
+```
+
+- [ ] **Step 3: Commit navigation and toast styles**
+
+```bash
+git add server/static/styles.css
+git commit -m "feat(ui): add wizard navigation and toast styles"
+```
+
+### Task 8: Add responsive styles
+
+**Files:**
+- Modify: `server/static/styles.css`
+
+- [ ] **Step 1: Add header and base layout styles**
+
+```css
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+#theme-toggle {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    padding: 0.5rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+#theme-toggle:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Base Layout */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    transition: background 0.3s, color 0.3s;
+}
+```
+
+- [ ] **Step 2: Add tablet responsive styles**
+
+```css
+/* Responsive - Tablet (768px - 1024px) */
 @media (max-width: 1024px) {
     .wizard-card {
         max-width: 500px;
@@ -793,8 +1011,12 @@ Add to `styles.css`:
         grid-template-columns: repeat(2, 1fr);
     }
 }
+```
 
-/* Mobile (< 768px) */
+- [ ] **Step 3: Add mobile responsive styles**
+
+```css
+/* Responsive - Mobile (< 768px) */
 @media (max-width: 768px) {
     .wizard-container {
         padding: 0;
@@ -841,42 +1063,29 @@ Add to `styles.css`:
         font-size: 1rem;
     }
 }
-
-/* Remove old two-panel layout styles */
-main {
-    display: block;
-    padding: 0;
-}
-
-.input-panel,
-.result-panel {
-    display: none;
-}
 ```
 
-- [ ] **Step 2: Commit CSS changes**
+- [ ] **Step 4: Commit responsive styles**
 
 ```bash
 git add server/static/styles.css
-git commit -m "feat(ui): add wizard layout CSS styles"
+git commit -m "feat(ui): add responsive styles for tablet and mobile"
 ```
 
 ---
 
 ## Chunk 3: JavaScript Logic
 
-### Task 3: Implement wizard navigation in app.js
+### Task 9: Add state and initialization
 
 **Files:**
 - Modify: `server/static/app.js`
 
-- [ ] **Step 1: Replace entire app.js with wizard implementation**
+- [ ] **Step 1: Add App state and init function**
 
 ```javascript
 const App = {
-    // ========================================
     // State
-    // ========================================
     state: {
         currentStep: 1,
         totalSteps: 4,
@@ -884,25 +1093,36 @@ const App = {
         isExtracting: false,
         eventSource: null,
         lastError: null,
-        // Form data
         url: '',
         mode: 'component',
         strategy: 'text',
         query: ''
     },
 
-    // ========================================
     // Initialization
-    // ========================================
     init() {
         this.bindEvents();
         this.loadTheme();
         this.initKeyboardNav();
     },
+```
 
-    // ========================================
+- [ ] **Step 2: Commit state structure**
+
+```bash
+git add server/static/app.js
+git commit -m "feat(ui): add wizard state structure"
+```
+
+### Task 10: Add event bindings
+
+**Files:**
+- Modify: `server/static/app.js`
+
+- [ ] **Step 1: Add bindEvents function**
+
+```javascript
     // Event Bindings
-    // ========================================
     bindEvents() {
         // Theme toggle
         document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
@@ -956,20 +1176,32 @@ const App = {
         // Copy button
         document.getElementById('btn-copy-prompt').addEventListener('click', () => this.copyPrompt());
 
-        // URL input - clear error on type
+        // Clear errors on input
         document.getElementById('url').addEventListener('input', () => {
             document.getElementById('url-error').textContent = '';
         });
-
-        // Query input - clear error on type
         document.getElementById('query').addEventListener('input', () => {
             document.getElementById('query-error').textContent = '';
         });
     },
+```
 
-    // ========================================
+- [ ] **Step 2: Commit event bindings**
+
+```bash
+git add server/static/app.js
+git commit -m "feat(ui): add wizard event bindings"
+```
+
+### Task 11: Add navigation functions
+
+**Files:**
+- Modify: `server/static/app.js`
+
+- [ ] **Step 1: Add navigation functions (nextStep, prevStep, goToStep)**
+
+```javascript
     // Navigation
-    // ========================================
     nextStep() {
         if (!this.validateCurrentStep()) return;
 
@@ -1005,8 +1237,6 @@ const App = {
         document.querySelectorAll('.wizard-step[data-step]').forEach(step => {
             step.classList.add('hidden');
         });
-
-        // Hide state steps
         document.querySelectorAll('.wizard-step[data-state]').forEach(step => {
             step.classList.add('hidden');
         });
@@ -1015,7 +1245,6 @@ const App = {
         const targetStep = document.querySelector(`.wizard-step[data-step="${stepNum}"]`);
         if (targetStep) {
             targetStep.classList.remove('hidden');
-            // Add animation class
             targetStep.classList.remove('slide-left', 'slide-right');
             if (stepNum > prevStep) {
                 targetStep.classList.add('slide-left');
@@ -1024,15 +1253,12 @@ const App = {
             }
         }
 
-        // Update dots
         this.updateDots();
 
-        // Update query placeholder based on strategy
         if (stepNum === 4) {
             this.updateQueryPlaceholder();
         }
 
-        // Focus first input in step
         const firstInput = targetStep?.querySelector('input, textarea');
         if (firstInput) {
             setTimeout(() => firstInput.focus(), 100);
@@ -1041,27 +1267,37 @@ const App = {
 
     updateDots() {
         document.querySelectorAll('.dot').forEach((dot, index) => {
-            const isActive = index < this.state.currentStep;
+            // Only current step dot is active (spec: oc oo oo for step 2)
+            const isActive = index === this.state.currentStep - 1;
             dot.classList.toggle('active', isActive);
-            dot.setAttribute('aria-current', index === this.state.currentStep - 1 ? 'step' : 'false');
+            dot.setAttribute('aria-current', isActive ? 'step' : 'false');
         });
     },
+```
 
-    // ========================================
+- [ ] **Step 2: Commit navigation functions**
+
+```bash
+git add server/static/app.js
+git commit -m "feat(ui): add wizard navigation functions"
+```
+
+### Task 12: Add validation and form data functions
+
+**Files:**
+- Modify: `server/static/app.js`
+
+- [ ] **Step 1: Add validation functions**
+
+```javascript
     // Validation
-    // ========================================
     validateCurrentStep() {
         switch (this.state.currentStep) {
-            case 1:
-                return this.validateUrl();
-            case 2:
-                return true; // Mode always has a selection
-            case 3:
-                return true; // Strategy always has a selection
-            case 4:
-                return this.validateQuery();
-            default:
-                return true;
+            case 1: return this.validateUrl();
+            case 2: return true;
+            case 3: return true;
+            case 4: return this.validateQuery();
+            default: return true;
         }
     },
 
@@ -1077,11 +1313,11 @@ const App = {
         try {
             const parsed = new URL(url);
             if (!['http:', 'https:'].includes(parsed.protocol)) {
-                errorEl.textContent = 'Por favor, informe uma URL válida (http:// ou https://)';
+                errorEl.textContent = 'Por favor, informe uma URL valida (http:// ou https://)';
                 return false;
             }
         } catch {
-            errorEl.textContent = 'Por favor, informe uma URL válida (http:// ou https://)';
+            errorEl.textContent = 'Por favor, informe uma URL valida (http:// ou https://)';
             return false;
         }
 
@@ -1101,10 +1337,12 @@ const App = {
         errorEl.textContent = '';
         return true;
     },
+```
 
-    // ========================================
+- [ ] **Step 2: Add form data functions**
+
+```javascript
     // Form Data
-    // ========================================
     saveCurrentStepData() {
         switch (this.state.currentStep) {
             case 1:
@@ -1137,8 +1375,8 @@ const App = {
     updateStrategyDescription() {
         const descriptions = {
             css: 'Buscar por seletor CSS',
-            xpath: 'Buscar por expressão XPath',
-            text: 'Buscar por texto visível na página',
+            xpath: 'Buscar por expressao XPath',
+            text: 'Buscar por texto visivel na pagina',
             html_snippet: 'Buscar por trecho de HTML'
         };
         document.getElementById('strategy-description').textContent = descriptions[this.state.strategy];
@@ -1147,16 +1385,30 @@ const App = {
     updateQueryPlaceholder() {
         const placeholders = {
             css: 'Digite o seletor CSS (ex: .btn-primary)',
-            xpath: 'Digite a expressão XPath',
-            text: 'Digite o texto do botão, título ou elemento...',
+            xpath: 'Digite a expressao XPath',
+            text: 'Digite o texto do botao, titulo ou elemento...',
             html_snippet: 'Cole o trecho HTML do elemento'
         };
         document.getElementById('query').placeholder = placeholders[this.state.strategy];
     },
+```
 
-    // ========================================
+- [ ] **Step 3: Commit validation and form data**
+
+```bash
+git add server/static/app.js
+git commit -m "feat(ui): add validation and form data functions"
+```
+
+### Task 13: Add extraction and state management
+
+**Files:**
+- Modify: `server/static/app.js`
+
+- [ ] **Step 1: Add extraction functions**
+
+```javascript
     // Extraction
-    // ========================================
     async startExtraction() {
         if (!this.validateCurrentStep()) return;
 
@@ -1177,7 +1429,7 @@ const App = {
             });
 
             if (!response.ok) {
-                throw new Error('Falha ao iniciar extração');
+                throw new Error('Falha ao iniciar extracao');
             }
 
             const { task_id } = await response.json();
@@ -1185,7 +1437,7 @@ const App = {
             this.connectProgressStream(task_id);
 
         } catch (error) {
-            this.showError('Erro ao iniciar extração. Verifique a conexão.');
+            this.showError('Erro ao iniciar extracao. Verifique a conexao.');
         }
     },
 
@@ -1209,7 +1461,7 @@ const App = {
         this.state.eventSource.onerror = () => {
             this.state.eventSource.close();
             if (this.state.isExtracting) {
-                this.showError('Conexão perdida durante a extração');
+                this.showError('Conexao perdida durante a extracao');
             }
         };
     },
@@ -1225,7 +1477,6 @@ const App = {
         percent.textContent = `${pct}%`;
         message.textContent = data.message;
 
-        // Update ARIA
         bar.setAttribute('aria-valuenow', pct);
     },
 
@@ -1234,7 +1485,7 @@ const App = {
             const response = await fetch(`/api/extract/${taskId}/result`);
             const result = await response.json();
             this.showResult(result);
-            this.showToast('Extração concluída!', 'success');
+            this.showToast('Extracao concluida!', 'success');
         } catch (error) {
             this.showError('Erro ao obter resultado');
         }
@@ -1247,35 +1498,32 @@ const App = {
 
         if (this.state.taskId) {
             fetch(`/api/extract/${this.state.taskId}/cancel`, { method: 'POST' })
-                .catch(() => {}); // Ignore errors
+                .catch(() => {});
         }
 
         this.state.isExtracting = false;
         this.goToStep(4);
-        this.showToast('Extração cancelada', 'error');
+        this.showToast('Extracao cancelada', 'error');
     },
 
     resetExtraction() {
-        // Clear query only, keep other fields
         this.state.query = '';
         document.getElementById('query').value = '';
-
         this.state.isExtracting = false;
         this.state.lastError = null;
-
         this.goToStep(1);
     },
+```
 
-    // ========================================
+- [ ] **Step 2: Add state transition functions**
+
+```javascript
     // State Transitions
-    // ========================================
     showState(stateName) {
-        // Hide all steps
         document.querySelectorAll('.wizard-step').forEach(step => {
             step.classList.add('hidden');
         });
 
-        // Show target state
         const targetState = document.querySelector(`.wizard-step[data-state="${stateName}"]`);
         if (targetState) {
             targetState.classList.remove('hidden');
@@ -1293,10 +1541,8 @@ const App = {
         this.state.isExtracting = false;
         this.showState('result');
 
-        // Prompt
         document.getElementById('prompt-text').textContent = result.prompt;
 
-        // Screenshot
         const screenshotContainer = document.getElementById('screenshot-container');
         const screenshotImg = document.getElementById('screenshot-img');
         if (result.screenshot_path) {
@@ -1306,22 +1552,33 @@ const App = {
             screenshotContainer.classList.add('hidden');
         }
 
-        // JSON
         document.getElementById('json-text').textContent = JSON.stringify(result.full_json, null, 2);
 
-        // Assets
         const assetsList = document.getElementById('assets-list');
         assetsList.innerHTML = result.assets.map(a => `
             <li>${a.type}: ${a.local_path}</li>
         `).join('');
 
-        // Reset tabs
         this.switchTab('prompt');
     },
+```
 
-    // ========================================
+- [ ] **Step 3: Commit extraction and state management**
+
+```bash
+git add server/static/app.js
+git commit -m "feat(ui): add extraction and state management"
+```
+
+### Task 14: Add utilities and keyboard navigation
+
+**Files:**
+- Modify: `server/static/app.js`
+
+- [ ] **Step 1: Add utility functions**
+
+```javascript
     // Tabs
-    // ========================================
     switchTab(tabName) {
         document.querySelectorAll('.tab').forEach(t => {
             const isActive = t.dataset.tab === tabName;
@@ -1335,9 +1592,7 @@ const App = {
         });
     },
 
-    // ========================================
     // Utilities
-    // ========================================
     async copyPrompt() {
         const text = document.getElementById('prompt-text').textContent;
         await navigator.clipboard.writeText(text);
@@ -1358,9 +1613,7 @@ const App = {
         }, 3000);
     },
 
-    // ========================================
     // Theme
-    // ========================================
     toggleTheme() {
         const html = document.documentElement;
         const current = html.dataset.theme;
@@ -1373,10 +1626,12 @@ const App = {
         const saved = localStorage.getItem('theme') || 'dark';
         document.documentElement.dataset.theme = saved;
     },
+```
 
-    // ========================================
+- [ ] **Step 2: Add keyboard navigation**
+
+```javascript
     // Keyboard Navigation
-    // ========================================
     initKeyboardNav() {
         document.addEventListener('keydown', (e) => {
             // Escape to cancel extraction
@@ -1401,20 +1656,20 @@ const App = {
 document.addEventListener('DOMContentLoaded', () => App.init());
 ```
 
-- [ ] **Step 2: Commit JavaScript changes**
+- [ ] **Step 3: Commit utilities and keyboard navigation**
 
 ```bash
 git add server/static/app.js
-git commit -m "feat(ui): implement wizard navigation and state management"
+git commit -m "feat(ui): add utilities, theme, and keyboard navigation"
 ```
 
 ---
 
-## Chunk 4: Final Verification
+## Chunk 4: Verification
 
-### Task 4: Verify wizard implementation
+### Task 15: Verify wizard implementation
 
-- [ ] **Step 1: Start the application and verify wizard flow**
+- [ ] **Step 1: Start application and verify basic flow**
 
 ```bash
 python main.py
@@ -1422,38 +1677,48 @@ python main.py
 
 Expected behavior:
 1. Browser opens showing Step 1 (URL input)
-2. Enter URL and click "Continuar" → advances to Step 2
-3. Select mode and click "Continuar" → advances to Step 3 (or Step 4 if Landing Page)
-4. Select strategy and click "Continuar" → advances to Step 4
-5. Enter query and click "Extrair" → shows progress state
-6. After completion → shows result state
-7. Click "Nova Extração" → returns to Step 1 with URL preserved
+2. Enter URL and click "Continuar" -> advances to Step 2
+3. Select mode and click "Continuar" -> advances to Step 3 (or Step 4 if Landing Page)
+4. Select strategy and click "Continuar" -> advances to Step 4
+5. Enter query and click "Extrair" -> shows progress state
+6. After completion -> shows result state
+7. Click "Nova Extracao" -> returns to Step 1 with URL preserved
 
-- [ ] **Step 2: Verify responsive design**
+- [ ] **Step 2: Verify Landing Page mode skip behavior**
+
+Test sequence:
+1. Start at Step 1, enter URL
+2. At Step 2, select "Landing Page completa"
+3. Click "Continuar" -> verify Step 3 is SKIPPED, Step 4 is shown
+4. Click "Voltar" from Step 4 -> verify returns to Step 2 (not Step 3)
+
+- [ ] **Step 3: Verify responsive design**
 
 Resize browser to test:
 - Desktop (> 1024px): Card centered, 600px max-width
 - Tablet (768-1024px): Card 500px, strategy cards 2x2 grid
 - Mobile (< 768px): Full-width card, vertical button stack
 
-- [ ] **Step 3: Verify accessibility**
+- [ ] **Step 4: Verify accessibility**
 
 - Tab through all elements
 - Enter key advances steps
 - Escape cancels extraction
 - Screen reader announces step numbers
 
-- [ ] **Step 4: Final commit**
+- [ ] **Step 5: Final commit**
 
 ```bash
-git add -A
+git add server/static/index.html server/static/styles.css server/static/app.js
 git commit -m "feat(ui): complete wizard layout implementation
 
 - Full-screen card wizard with 4 steps
-- Progress dots and smooth transitions
+- Progress dots with current-step indication
+- Smooth slide transitions with reduced-motion support
 - Responsive design for desktop/tablet/mobile
 - Keyboard navigation and ARIA labels
-- Error state and retry functionality"
+- Error state and retry functionality
+- Skip step 3 for Landing Page mode"
 ```
 
 ---
@@ -1462,9 +1727,20 @@ git commit -m "feat(ui): complete wizard layout implementation
 
 | Task | Description | Files |
 |------|-------------|-------|
-| 1 | Restructure HTML for wizard | `index.html` |
-| 2 | Add wizard CSS styles | `styles.css` |
-| 3 | Implement wizard JS logic | `app.js` |
-| 4 | Verify and commit | - |
+| 1 | Add wizard container and Steps 1-2 | `index.html` |
+| 2 | Add Steps 3-4 and state views | `index.html` |
+| 3 | Add base wizard CSS | `styles.css` |
+| 4 | Add form and button styles | `styles.css` |
+| 5 | Add radio card styles | `styles.css` |
+| 6 | Add progress, error, and result styles | `styles.css` |
+| 7 | Add navigation and toast styles | `styles.css` |
+| 8 | Add responsive styles | `styles.css` |
+| 9 | Add state and initialization | `app.js` |
+| 10 | Add event bindings | `app.js` |
+| 11 | Add navigation functions | `app.js` |
+| 12 | Add validation and form data | `app.js` |
+| 13 | Add extraction and state management | `app.js` |
+| 14 | Add utilities and keyboard navigation | `app.js` |
+| 15 | Verify wizard implementation | - |
 
-**Total:** 4 tasks, ~8 steps
+**Total:** 15 tasks, ~45 steps
