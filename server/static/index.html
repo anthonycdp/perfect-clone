@@ -4,303 +4,166 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Component Extractor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <!-- Branding Bar -->
-    <header class="branding-bar">
-        <div class="branding-left">
-            <div class="logo">
-                <div class="logo-icon">
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="2" y="2" width="10" height="10" rx="2" fill="currentColor" opacity="0.9"/>
-                        <rect x="16" y="2" width="10" height="10" rx="2" fill="currentColor" opacity="0.5"/>
-                        <rect x="2" y="16" width="10" height="10" rx="2" fill="currentColor" opacity="0.3"/>
-                        <rect x="16" y="16" width="10" height="10" rx="2" fill="currentColor" opacity="0.7"/>
-                    </svg>
-                </div>
-                <div class="logo-text">
-                    <h1>Component Extractor</h1>
-                    <span class="tagline">Extract UI components from any webpage</span>
-                </div>
-            </div>
-        </div>
-        <div class="branding-right">
-            <div class="status-indicator" id="status-indicator">
-                <span class="status-dot"></span>
-                <span class="status-label" id="status">Ready</span>
-            </div>
-            <button id="theme-toggle" class="theme-toggle" title="Toggle theme">
-                <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="5"/>
-                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-                </svg>
-                <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-            </button>
-        </div>
+    <header>
+        <h1>Component Extractor</h1>
+        <button id="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">◐</button>
     </header>
 
-    <!-- Main Application -->
-    <main class="app-main">
-        <!-- Configuration Sidebar -->
-        <aside class="config-sidebar">
-            <div class="sidebar-content">
-                <!-- Source Section -->
-                <section class="config-section">
-                    <div class="section-header">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                        </svg>
-                        <h2>Source</h2>
-                    </div>
-                    <div class="section-body">
-                        <div class="form-group">
-                            <label for="url">Target URL</label>
-                            <div class="input-wrapper">
-                                <input type="url" id="url" placeholder="https://example.com" required>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Mode Section -->
-                <section class="config-section">
-                    <div class="section-header">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <path d="M3 9h18M9 21V9"/>
-                        </svg>
-                        <h2>Extraction Mode</h2>
-                    </div>
-                    <div class="section-body">
-                        <div class="segmented-control">
-                            <input type="radio" name="mode" value="component" id="mode-component" checked>
-                            <label for="mode-component">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="3" width="7" height="7"/>
-                                    <rect x="14" y="3" width="7" height="7"/>
-                                    <rect x="3" y="14" width="7" height="7"/>
-                                    <rect x="14" y="14" width="7" height="7"/>
-                                </svg>
-                                <span>Component</span>
-                            </label>
-                            <input type="radio" name="mode" value="full_page" id="mode-full">
-                            <label for="mode-full">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                    <path d="M8 21h8M12 17v4"/>
-                                </svg>
-                                <span>Full Page</span>
-                            </label>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Strategy Section -->
-                <section class="config-section">
-                    <div class="section-header">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                        </svg>
-                        <h2>Strategy</h2>
-                    </div>
-                    <div class="section-body">
-                        <div class="strategy-grid">
-                            <input type="radio" name="strategy" value="css" id="strategy-css">
-                            <label for="strategy-css" class="strategy-option">
-                                <span class="strategy-name">CSS</span>
-                                <span class="strategy-desc">Selector</span>
-                            </label>
-                            <input type="radio" name="strategy" value="xpath" id="strategy-xpath">
-                            <label for="strategy-xpath" class="strategy-option">
-                                <span class="strategy-name">XPath</span>
-                                <span class="strategy-desc">Path query</span>
-                            </label>
-                            <input type="radio" name="strategy" value="text" id="strategy-text" checked>
-                            <label for="strategy-text" class="strategy-option">
-                                <span class="strategy-name">Text</span>
-                                <span class="strategy-desc">Search</span>
-                            </label>
-                            <input type="radio" name="strategy" value="html_snippet" id="strategy-html">
-                            <label for="strategy-html" class="strategy-option">
-                                <span class="strategy-name">HTML</span>
-                                <span class="strategy-desc">Snippet</span>
-                            </label>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Query Section -->
-                <section class="config-section" id="query-section">
-                    <div class="section-header">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"/>
-                            <path d="M21 21l-4.35-4.35"/>
-                        </svg>
-                        <h2>Query</h2>
-                    </div>
-                    <div class="section-body">
-                        <div class="form-group">
-                            <label for="query">Selector / Query</label>
-                            <textarea id="query" rows="3" placeholder="Text to search..."></textarea>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Progress Section -->
-                <section class="config-section progress-section hidden" id="progress-section">
-                    <div class="section-header">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                        </svg>
-                        <h2>Progress</h2>
-                    </div>
-                    <div class="section-body">
-                        <div class="progress-bar">
-                            <div class="progress-fill"></div>
-                            <span class="progress-percentage">0%</span>
-                        </div>
-                        <p class="progress-text">Preparing...</p>
-                    </div>
-                </section>
+    <main class="wizard-container">
+        <div class="wizard-card">
+            <!-- Step 1: URL -->
+            <div class="wizard-step" data-step="1" aria-label="Passo 1 de 4">
+                <span class="step-indicator">1 de 4</span>
+                <h2 class="step-title">Qual site voce quer extrair?</h2>
+                <div class="form-group">
+                    <input type="url" id="url" placeholder="https://exemplo.com" aria-label="URL do site">
+                    <span class="error-message" id="url-error"></span>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-primary" id="btn-next-1">Continuar</button>
+                </div>
             </div>
 
-            <!-- CTA Section -->
-            <div class="sidebar-footer">
-                <button id="extract-btn" class="cta-button">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    <span>Extract Component</span>
-                </button>
-            </div>
-        </aside>
-
-        <!-- Workspace Area -->
-        <div class="workspace">
-            <!-- Empty State -->
-            <div class="empty-state" id="empty-state">
-                <div class="empty-illustration">
-                    <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-                        <rect x="10" y="20" width="100" height="70" rx="8" stroke="currentColor" stroke-width="2" opacity="0.3"/>
-                        <rect x="20" y="30" width="35" height="20" rx="4" fill="currentColor" opacity="0.2"/>
-                        <rect x="65" y="30" width="35" height="20" rx="4" fill="currentColor" opacity="0.15"/>
-                        <rect x="20" y="60" width="80" height="20" rx="4" fill="currentColor" opacity="0.1"/>
-                        <circle cx="95" cy="90" r="20" fill="currentColor" opacity="0.2"/>
-                        <path d="M90 90h10M95 85v10" stroke="currentColor" stroke-width="2"/>
-                    </svg>
+            <!-- Step 2: Mode -->
+            <div class="wizard-step hidden" data-step="2" aria-label="Passo 2 de 4">
+                <span class="step-indicator">2 de 4</span>
+                <h2 class="step-title">O que voce quer extrair?</h2>
+                <div class="radio-cards" role="radiogroup" aria-label="Modo de extracao">
+                    <div class="radio-card selected" data-value="component" role="radio" aria-checked="true" tabindex="0">
+                        <div class="radio-card-header">
+                            <span class="radio-indicator"></span>
+                            <span class="radio-label">Componente unico</span>
+                        </div>
+                        <p class="radio-card-description">Um elemento especifico da pagina</p>
+                    </div>
+                    <div class="radio-card" data-value="full_page" role="radio" aria-checked="false" tabindex="0">
+                        <div class="radio-card-header">
+                            <span class="radio-indicator"></span>
+                            <span class="radio-label">Landing Page completa</span>
+                        </div>
+                        <p class="radio-card-description">Toda a pagina inicial</p>
+                    </div>
                 </div>
-                <h2>Ready to Extract</h2>
-                <p>Enter a URL and configure your extraction settings to get started</p>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-back-2">Voltar</button>
+                    <button class="btn-primary" id="btn-next-2">Continuar</button>
+                </div>
             </div>
 
-            <!-- Results Panel -->
-            <div class="result-panel hidden" id="result-panel">
-                <!-- Preview Hero -->
-                <div class="preview-hero" id="preview-hero">
-                    <div class="preview-header">
-                        <h3>Extracted Component</h3>
-                        <div class="preview-actions" id="result-actions">
-                            <a id="download-package" class="download-button" href="#" download>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                    <polyline points="7 10 12 15 17 10"/>
-                                    <line x1="12" y1="15" x2="12" y2="3"/>
-                                </svg>
-                                <span>Download Package</span>
-                            </a>
-                            <span id="package-expiry" class="expiry-badge"></span>
-                        </div>
+            <!-- Step 3: Strategy -->
+            <div class="wizard-step hidden" data-step="3" aria-label="Passo 3 de 4">
+                <span class="step-indicator">3 de 4</span>
+                <h2 class="step-title">Como encontrar o componente?</h2>
+                <div class="radio-cards strategy-cards" role="radiogroup" aria-label="Estrategia de busca">
+                    <div class="radio-card" data-value="css" role="radio" aria-checked="false" tabindex="0">
+                        <span class="radio-label">CSS</span>
+                        <span class="radio-card-hint">Seletor CSS</span>
                     </div>
-                    <div class="preview-container">
-                        <div class="screenshot-preview hidden" id="screenshot-preview">
-                            <img id="screenshot-img" src="" alt="Screenshot preview">
-                        </div>
-                        <div class="no-preview" id="no-preview">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                <circle cx="8.5" cy="8.5" r="1.5"/>
-                                <path d="M21 15l-5-5L5 21"/>
-                            </svg>
-                            <span>No preview available</span>
-                        </div>
+                    <div class="radio-card" data-value="xpath" role="radio" aria-checked="false" tabindex="0">
+                        <span class="radio-label">XPath</span>
+                        <span class="radio-card-hint">Expressao XPath</span>
+                    </div>
+                    <div class="radio-card selected" data-value="text" role="radio" aria-checked="true" tabindex="0">
+                        <span class="radio-label">Texto</span>
+                        <span class="radio-card-hint">Buscar por texto visivel</span>
+                    </div>
+                    <div class="radio-card" data-value="html_snippet" role="radio" aria-checked="false" tabindex="0">
+                        <span class="radio-label">HTML</span>
+                        <span class="radio-card-hint">Trecho de HTML</span>
                     </div>
                 </div>
+                <p class="strategy-description" id="strategy-description">Buscar por texto visivel na pagina</p>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-back-3">Voltar</button>
+                    <button class="btn-primary" id="btn-next-3">Continuar</button>
+                </div>
+            </div>
 
-                <!-- Output Tabs -->
-                <div class="output-panel">
-                    <div class="tabs-container">
-                        <button class="tab active" data-tab="prompt">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
-                                <line x1="16" y1="13" x2="8" y2="13"/>
-                                <line x1="16" y1="17" x2="8" y2="17"/>
-                                <polyline points="10 9 9 9 8 9"/>
-                            </svg>
-                            <span>Prompt</span>
-                        </button>
-                        <button class="tab" data-tab="json">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="16 18 22 12 16 6"/>
-                                <polyline points="8 6 2 12 8 18"/>
-                            </svg>
-                            <span>JSON</span>
-                        </button>
-                        <button class="tab" data-tab="assets">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                            </svg>
-                            <span>Assets</span>
-                        </button>
+            <!-- Step 4: Query + Execute -->
+            <div class="wizard-step hidden" data-step="4" aria-label="Passo 4 de 4">
+                <span class="step-indicator">4 de 4</span>
+                <h2 class="step-title">O que voce quer buscar?</h2>
+                <div class="form-group">
+                    <textarea id="query" rows="3" placeholder="Digite o texto do botao, titulo ou elemento..." aria-label="Query de busca"></textarea>
+                    <span class="error-message" id="query-error"></span>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-back-4">Voltar</button>
+                    <button class="btn-primary" id="btn-extract">Extrair</button>
+                </div>
+            </div>
+
+            <!-- Progress State -->
+            <div class="wizard-step hidden" data-state="progress" aria-label="Extraindo">
+                <h2 class="step-title centered">Extraindo...</h2>
+                <div class="progress-container">
+                    <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-fill"></div>
                     </div>
+                    <span class="progress-percent">0%</span>
+                </div>
+                <p class="progress-message" id="progress-message">Preparando...</p>
+                <div class="wizard-actions centered">
+                    <button class="btn-danger" id="btn-cancel">Cancelar</button>
+                </div>
+            </div>
 
-                    <div class="tab-content active" data-content="prompt">
-                        <div class="prompt-container">
-                            <button class="btn-copy" data-copy="prompt-text">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="9" y="9" width="13" height="13" rx="2"/>
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                </svg>
-                                <span>Copy</span>
-                            </button>
-                            <pre id="prompt-text"></pre>
-                        </div>
+            <!-- Error State -->
+            <div class="wizard-step hidden" data-state="error" aria-label="Erro">
+                <div class="error-icon">!</div>
+                <h2 class="step-title centered">Erro</h2>
+                <p class="error-text" id="error-text"></p>
+                <div class="wizard-actions centered">
+                    <button class="btn-secondary" id="btn-back-error">Voltar</button>
+                    <button class="btn-primary" id="btn-retry">Tentar Novamente</button>
+                </div>
+            </div>
+
+            <!-- Result State -->
+            <div class="wizard-step hidden" data-state="result">
+                <div class="result-header">
+                    <span class="success-icon">ok</span>
+                    <h2 class="step-title">Extracao concluida!</h2>
+                </div>
+                <div class="tabs">
+                    <button class="tab active" data-tab="prompt" aria-selected="true">Prompt</button>
+                    <button class="tab" data-tab="json" aria-selected="false">JSON</button>
+                    <button class="tab" data-tab="assets" aria-selected="false">Assets</button>
+                </div>
+                <div class="tab-content active" data-content="prompt">
+                    <div class="screenshot-preview hidden" id="screenshot-container">
+                        <img id="screenshot-img" src="" alt="Screenshot do componente">
                     </div>
-
-                    <div class="tab-content" data-content="json">
-                        <div class="json-container">
-                            <button class="btn-copy" data-copy="json-text">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="9" y="9" width="13" height="13" rx="2"/>
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                </svg>
-                                <span>Copy</span>
-                            </button>
-                            <pre id="json-text"></pre>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" data-content="assets">
-                        <div class="assets-container">
-                            <ul id="assets-list"></ul>
-                        </div>
+                    <div class="prompt-container">
+                        <pre id="prompt-text"></pre>
+                        <button class="btn-copy" id="btn-copy-prompt" aria-label="Copiar prompt">Copiar</button>
                     </div>
                 </div>
+                <div class="tab-content hidden" data-content="json">
+                    <pre id="json-text"></pre>
+                </div>
+                <div class="tab-content hidden" data-content="assets">
+                    <ul id="assets-list"></ul>
+                </div>
+                <div class="wizard-actions">
+                    <button class="btn-secondary" id="btn-new-extraction">Nova Extracao</button>
+                </div>
+            </div>
+
+            <!-- Progress Dots -->
+            <div class="wizard-dots" aria-label="Progresso do wizard">
+                <span class="dot active" data-dot="1" aria-label="Passo 1" aria-current="step"></span>
+                <span class="dot" data-dot="2" aria-label="Passo 2"></span>
+                <span class="dot" data-dot="3" aria-label="Passo 3"></span>
+                <span class="dot" data-dot="4" aria-label="Passo 4"></span>
             </div>
         </div>
     </main>
 
-    <!-- Toast Container -->
-    <div id="toast-container"></div>
+    <div id="toast-container" aria-live="polite"></div>
 
     <script src="/static/app.js"></script>
 </body>

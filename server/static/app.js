@@ -1,538 +1,478 @@
-// Component Extractor Web UI - JavaScript Application
-// Premium Dark UI Implementation
+const App = {
+    // State
+    state: {
+        currentStep: 1,
+        totalSteps: 4,
+        taskId: null,
+        isExtracting: false,
+        eventSource: null,
+        lastError: null,
+        url: '',
+        mode: 'component',
+        strategy: 'text',
+        query: ''
+    },
 
-// ========================================
-// State
-// ========================================
-let taskId = null;
-let isExtracting = false;
-let eventSource = null;
+    // Initialization
+    init() {
+        this.bindEvents();
+        this.loadTheme();
+        this.initKeyboardNav();
+    },
 
-// ========================================
-// DOM Elements
-// ========================================
-const elements = {
-    // Inputs
-    urlInput: document.getElementById('url'),
-    queryInput: document.getElementById('query'),
-    extractBtn: document.getElementById('extract-btn'),
+    // Event Bindings
+    bindEvents() {
+        // Theme toggle
+        document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
 
-    // Progress
-    progressSection: document.getElementById('progress-section'),
-    progressFill: document.querySelector('.progress-fill'),
-    progressPercentage: document.querySelector('.progress-percentage'),
-    progressText: document.querySelector('.progress-text'),
+        // Navigation buttons
+        document.getElementById('btn-next-1').addEventListener('click', () => this.nextStep());
+        document.getElementById('btn-next-2').addEventListener('click', () => this.nextStep());
+        document.getElementById('btn-next-3').addEventListener('click', () => this.nextStep());
+        document.getElementById('btn-back-2').addEventListener('click', () => this.prevStep());
+        document.getElementById('btn-back-3').addEventListener('click', () => this.prevStep());
+        document.getElementById('btn-back-4').addEventListener('click', () => this.prevStep());
 
-    // Results
-    emptyState: document.getElementById('empty-state'),
-    resultPanel: document.getElementById('result-panel'),
-    promptText: document.getElementById('prompt-text'),
-    jsonText: document.getElementById('json-text'),
-    assetsList: document.getElementById('assets-list'),
+        // Extraction
+        document.getElementById('btn-extract').addEventListener('click', () => this.startExtraction());
+        document.getElementById('btn-cancel').addEventListener('click', () => this.cancelExtraction());
 
-    // Preview
-    screenshotImg: document.getElementById('screenshot-img'),
-    screenshotPreview: document.getElementById('screenshot-preview'),
-    noPreview: document.getElementById('no-preview'),
-    resultActions: document.getElementById('result-actions'),
-    downloadPackageLink: document.getElementById('download-package'),
-    packageExpiry: document.getElementById('package-expiry'),
+        // Error state
+        document.getElementById('btn-back-error').addEventListener('click', () => this.goToStep(4));
+        document.getElementById('btn-retry').addEventListener('click', () => this.startExtraction());
 
-    // Status & Theme
-    statusText: document.getElementById('status'),
-    statusIndicator: document.getElementById('status-indicator'),
-    themeToggle: document.getElementById('theme-toggle'),
+        // New extraction
+        document.getElementById('btn-new-extraction').addEventListener('click', () => this.resetExtraction());
 
-    // Navigation
-    tabs: document.querySelectorAll('.tab'),
-    copyButtons: document.querySelectorAll('.btn-copy'),
-    querySection: document.getElementById('query-section')
-};
-
-// ========================================
-// Initialize
-// ========================================
-document.addEventListener('DOMContentLoaded', () => {
-    loadTheme();
-    bindEvents();
-    initializeModeVisibility();
-});
-
-// ========================================
-// Event Bindings
-// ========================================
-function bindEvents() {
-    // Main actions
-    elements.extractBtn.addEventListener('click', startExtraction);
-    elements.themeToggle.addEventListener('click', toggleTheme);
-
-    // Tabs
-    elements.tabs.forEach(tab => {
-        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-    });
-
-    // Copy buttons
-    elements.copyButtons.forEach(btn => {
-        btn.addEventListener('click', () => copyToClipboard(btn.dataset.copy));
-    });
-
-    // Strategy changes
-    document.querySelectorAll('input[name="strategy"]').forEach(radio => {
-        radio.addEventListener('change', updateQueryPlaceholder);
-    });
-
-    // Mode changes
-    document.querySelectorAll('input[name="mode"]').forEach(radio => {
-        radio.addEventListener('change', handleModeChange);
-    });
-
-    // Update query placeholder initially
-    updateQueryPlaceholder();
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', handleKeyboardShortcuts);
-}
-
-// ========================================
-// Mode & Strategy Handlers
-// ========================================
-function initializeModeVisibility() {
-    const mode = document.querySelector('input[name="mode"]:checked').value;
-    updateQuerySectionVisibility(mode === 'component');
-}
-
-function handleModeChange(event) {
-    const isComponentMode = event.target.value === 'component';
-    updateQuerySectionVisibility(isComponentMode);
-}
-
-function updateQuerySectionVisibility(visible) {
-    if (elements.querySection) {
-        elements.querySection.style.display = visible ? 'block' : 'none';
-    }
-}
-
-function updateQueryPlaceholder() {
-    const strategy = document.querySelector('input[name="strategy"]:checked').value;
-    const placeholders = {
-        css: '.class-name or #id',
-        xpath: '//div[@class="example"]',
-        text: 'Text to search...',
-        html_snippet: '<div class="example">...</div>'
-    };
-    elements.queryInput.placeholder = placeholders[strategy] || 'Enter query...';
-}
-
-// ========================================
-// Extraction Flow
-// ========================================
-async function startExtraction() {
-    const url = elements.urlInput.value.trim();
-    if (!url) {
-        showToast('Please enter a URL', 'error');
-        elements.urlInput.focus();
-        return;
-    }
-
-    const mode = document.querySelector('input[name="mode"]:checked').value;
-    const strategy = document.querySelector('input[name="strategy"]:checked').value;
-    const query = elements.queryInput.value.trim();
-
-    if (mode !== 'full_page' && !query) {
-        showToast('Please enter a selector or query', 'error');
-        elements.queryInput.focus();
-        return;
-    }
-
-    // Update UI state
-    setExtractingState(true);
-    showProgress();
-    updateProgress({ progress: 0, message: 'Starting extraction...' });
-
-    // Hide previous results and show progress
-    elements.resultPanel.classList.add('hidden');
-    elements.emptyState.classList.add('hidden');
-
-    try {
-        const response = await fetch('/api/extract', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                url,
-                mode,
-                strategy,
-                query
-            })
+        // Radio cards - Mode
+        document.querySelectorAll('.radio-cards:not(.strategy-cards) .radio-card').forEach(card => {
+            card.addEventListener('click', () => this.selectRadioCard(card, 'mode'));
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.selectRadioCard(card, 'mode');
+                }
+            });
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Extraction failed');
+        // Radio cards - Strategy
+        document.querySelectorAll('.strategy-cards .radio-card').forEach(card => {
+            card.addEventListener('click', () => this.selectRadioCard(card, 'strategy'));
+            card.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.selectRadioCard(card, 'strategy');
+                }
+            });
+        });
+
+        // Tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+        });
+
+        // Copy button
+        document.getElementById('btn-copy-prompt').addEventListener('click', () => this.copyPrompt());
+
+        // Clear errors on input
+        document.getElementById('url').addEventListener('input', () => {
+            document.getElementById('url-error').textContent = '';
+        });
+        document.getElementById('query').addEventListener('input', () => {
+            document.getElementById('query-error').textContent = '';
+        });
+    },
+
+    // Navigation
+    nextStep() {
+        if (!this.validateCurrentStep()) return;
+
+        this.saveCurrentStepData();
+
+        // Skip step 3 if mode is full_page
+        if (this.state.currentStep === 2 && this.state.mode === 'full_page') {
+            this.goToStep(4);
+            return;
         }
 
-        const data = await response.json();
-        taskId = data.task_id;
-
-        updateStatus(`Task created: ${taskId}`);
-        connectProgressStream(taskId);
-
-    } catch (error) {
-        showToast(error.message, 'error');
-        setExtractingState(false);
-        hideProgress();
-        updateStatus('Error');
-        elements.emptyState.classList.remove('hidden');
-    }
-}
-
-// ========================================
-// Progress Stream (SSE)
-// ========================================
-function connectProgressStream(taskId) {
-    if (eventSource) {
-        eventSource.close();
-    }
-
-    eventSource = new EventSource(`/api/extract/${taskId}/progress`);
-
-    eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        updateProgress(data);
-
-        if (data.done && data.step_name === 'error') {
-            eventSource.close();
-            showToast(data.message || 'Extraction failed', 'error');
-            setExtractingState(false);
-            hideProgress();
-            updateStatus('Failed');
-            setStatusError(true);
-        } else if (data.done) {
-            eventSource.close();
-            fetchResult(taskId);
+        if (this.state.currentStep < this.state.totalSteps) {
+            this.goToStep(this.state.currentStep + 1);
         }
-    };
+    },
 
-    eventSource.onerror = (error) => {
-        console.error('SSE Error:', error);
-        eventSource.close();
-        showToast('Connection lost', 'error');
-        setExtractingState(false);
-        hideProgress();
-        updateStatus('Error');
-        setStatusError(true);
-    };
-}
-
-function updateProgress(data) {
-    const totalSteps = data.total_steps || 12;
-    const progress = typeof data.progress === 'number'
-        ? data.progress
-        : Math.min(100, Math.round(((data.step || 0) / totalSteps) * 100));
-    const message = data.message || 'Processing...';
-
-    elements.progressFill.style.width = `${progress}%`;
-    elements.progressPercentage.textContent = `${progress}%`;
-    elements.progressText.textContent = message;
-    updateStatus(message);
-}
-
-// ========================================
-// Result Handling
-// ========================================
-async function fetchResult(taskId) {
-    try {
-        updateProgress({ progress: 95, message: 'Fetching results...' });
-
-        const response = await fetch(`/api/extract/${taskId}/result`);
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch result');
-        }
-
-        const result = await response.json();
-        showResult(result);
-
-        updateProgress({ progress: 100, message: 'Complete!' });
-        setExtractingState(false);
-        updateStatus('Ready');
-        setStatusSuccess(true);
-        showToast('Extraction complete!', 'success');
-
-        // Hide progress after a delay
-        setTimeout(() => {
-            hideProgress();
-        }, 1000);
-
-    } catch (error) {
-        showToast(error.message, 'error');
-        setExtractingState(false);
-        hideProgress();
-        updateStatus('Error');
-        setStatusError(true);
-    }
-}
-
-function showResult(result) {
-    // Show result panel
-    elements.emptyState.classList.add('hidden');
-    elements.resultPanel.classList.remove('hidden');
-
-    // Show prompt
-    if (result.prompt) {
-        elements.promptText.textContent = result.prompt;
-    }
-
-    // Show screenshot
-    if (result.screenshot_url) {
-        elements.screenshotImg.src = result.screenshot_url;
-        elements.screenshotPreview.classList.remove('hidden');
-        elements.noPreview.classList.add('hidden');
-    } else {
-        elements.screenshotImg.removeAttribute('src');
-        elements.screenshotPreview.classList.add('hidden');
-        elements.noPreview.classList.remove('hidden');
-    }
-
-    // Show download
-    if (result.download_url) {
-        elements.downloadPackageLink.href = result.download_url;
-        elements.downloadPackageLink.setAttribute(
-            'download',
-            result.download_filename || 'component-extractor-package.zip'
-        );
-        elements.resultActions.classList.remove('hidden');
-    } else {
-        elements.downloadPackageLink.removeAttribute('href');
-        elements.resultActions.classList.add('hidden');
-    }
-
-    // Show expiry
-    if (result.expires_at) {
-        elements.packageExpiry.textContent = `Expires ${formatExpiry(result.expires_at)}`;
-    } else {
-        elements.packageExpiry.textContent = '';
-    }
-
-    // Show JSON
-    if (result.full_json) {
-        elements.jsonText.textContent = JSON.stringify(result.full_json, null, 2);
-    }
-
-    // Show assets
-    if (result.assets && result.assets.length > 0) {
-        elements.assetsList.innerHTML = result.assets.map(asset => `
-            <li>
-                <span>
-                    <strong>${asset.type}</strong>: ${asset.filename}
-                </span>
-                ${asset.url ? `<a href="${asset.url}" target="_blank" rel="noopener noreferrer">View</a>` : ''}
-            </li>
-        `).join('');
-    } else {
-        elements.assetsList.innerHTML = '<li class="no-assets">No assets extracted</li>';
-    }
-
-    // Switch to prompt tab
-    switchTab('prompt');
-}
-
-// ========================================
-// UI State Management
-// ========================================
-function setExtractingState(extracting) {
-    isExtracting = extracting;
-    elements.extractBtn.disabled = extracting;
-
-    const btnSpan = elements.extractBtn.querySelector('span');
-    if (btnSpan) {
-        btnSpan.textContent = extracting ? 'Extracting...' : 'Extract Component';
-    }
-
-    // Add loading class for animation
-    if (extracting) {
-        elements.extractBtn.classList.add('loading');
-    } else {
-        elements.extractBtn.classList.remove('loading');
-    }
-}
-
-function showProgress() {
-    elements.progressSection.classList.remove('hidden');
-}
-
-function hideProgress() {
-    elements.progressSection.classList.add('hidden');
-    elements.progressFill.style.width = '0%';
-}
-
-function updateStatus(message) {
-    elements.statusText.textContent = message;
-}
-
-function setStatusSuccess(success) {
-    const dot = elements.statusIndicator.querySelector('.status-dot');
-    if (success) {
-        dot.style.background = 'var(--color-success)';
-    }
-}
-
-function setStatusError(error) {
-    const dot = elements.statusIndicator.querySelector('.status-dot');
-    if (error) {
-        dot.style.background = 'var(--color-error)';
-        setTimeout(() => {
-            dot.style.background = 'var(--color-success)';
-        }, 3000);
-    }
-}
-
-// ========================================
-// Tab Navigation
-// ========================================
-function switchTab(tabName) {
-    elements.tabs.forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.tab === tabName);
-    });
-
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.toggle('active', content.dataset.content === tabName);
-    });
-}
-
-// ========================================
-// Clipboard
-// ========================================
-async function copyToClipboard(elementId) {
-    const element = document.getElementById(elementId);
-    const text = element.textContent;
-
-    try {
-        await navigator.clipboard.writeText(text);
-        showToast('Copied to clipboard!', 'success');
-    } catch (error) {
-        // Fallback for older browsers
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        showToast('Copied to clipboard!', 'success');
-    }
-}
-
-// ========================================
-// Toast Notifications
-// ========================================
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'toastSlideOut 0.3s ease forwards';
-        setTimeout(() => {
-            if (toast.parentNode) {
-                container.removeChild(toast);
+    prevStep() {
+        if (this.state.currentStep > 1) {
+            // Skip step 3 if mode is full_page
+            if (this.state.currentStep === 4 && this.state.mode === 'full_page') {
+                this.goToStep(2);
+                return;
             }
-        }, 300);
-    }, 3000);
-}
-
-// ========================================
-// Theme Management
-// ========================================
-function toggleTheme() {
-    const html = document.documentElement;
-    const currentTheme = html.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-    html.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-}
-
-function loadTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-}
-
-// ========================================
-// Utilities
-// ========================================
-function formatExpiry(value) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
-
-    return date.toLocaleString(undefined, {
-        dateStyle: 'short',
-        timeStyle: 'short'
-    });
-}
-
-function handleKeyboardShortcuts(event) {
-    // Ctrl/Cmd + Enter to extract
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        event.preventDefault();
-        if (!isExtracting) {
-            startExtraction();
+            this.goToStep(this.state.currentStep - 1);
         }
-    }
+    },
 
-    // Escape to cancel (if we implement cancellation)
-    if (event.key === 'Escape' && isExtracting) {
-        // Could implement cancellation here
-    }
-}
+    goToStep(stepNum) {
+        const prevStep = this.state.currentStep;
+        this.state.currentStep = stepNum;
 
-// ========================================
-// Animations & Micro-interactions
-// ========================================
+        // Hide all steps
+        document.querySelectorAll('.wizard-step[data-step]').forEach(step => {
+            step.classList.add('hidden');
+        });
+        document.querySelectorAll('.wizard-step[data-state]').forEach(step => {
+            step.classList.add('hidden');
+        });
 
-// Add ripple effect to buttons
-document.addEventListener('click', function(e) {
-    const button = e.target.closest('.cta-button, .download-button');
-    if (!button) return;
-
-    const ripple = document.createElement('span');
-    ripple.style.cssText = `
-        position: absolute;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        transform: scale(0);
-        animation: ripple 0.6s ease-out;
-        pointer-events: none;
-    `;
-
-    const rect = button.getBoundingClientRect();
-    const size = Math.max(rect.width, rect.height);
-    ripple.style.width = ripple.style.height = size + 'px';
-    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
-    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
-
-    button.style.position = 'relative';
-    button.style.overflow = 'hidden';
-    button.appendChild(ripple);
-
-    setTimeout(() => ripple.remove(), 600);
-});
-
-// Add ripple animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes ripple {
-        to {
-            transform: scale(4);
-            opacity: 0;
+        // Show target step
+        const targetStep = document.querySelector(`.wizard-step[data-step="${stepNum}"]`);
+        if (targetStep) {
+            targetStep.classList.remove('hidden');
+            targetStep.classList.remove('slide-left', 'slide-right');
+            if (stepNum > prevStep) {
+                targetStep.classList.add('slide-left');
+            } else if (stepNum < prevStep) {
+                targetStep.classList.add('slide-right');
+            }
         }
+
+        this.updateDots();
+
+        if (stepNum === 4) {
+            this.updateQueryPlaceholder();
+        }
+
+        const firstInput = targetStep?.querySelector('input, textarea');
+        if (firstInput) {
+            setTimeout(() => firstInput.focus(), 100);
+        }
+    },
+
+    updateDots() {
+        document.querySelectorAll('.dot').forEach((dot, index) => {
+            // Only current step dot is active (spec: oc oo oo for step 2)
+            const isActive = index === this.state.currentStep - 1;
+            dot.classList.toggle('active', isActive);
+            dot.setAttribute('aria-current', isActive ? 'step' : 'false');
+        });
+    },
+
+    // Validation
+    validateCurrentStep() {
+        switch (this.state.currentStep) {
+            case 1: return this.validateUrl();
+            case 2: return true;
+            case 3: return true;
+            case 4: return this.validateQuery();
+            default: return true;
+        }
+    },
+
+    validateUrl() {
+        const url = document.getElementById('url').value.trim();
+        const errorEl = document.getElementById('url-error');
+
+        if (!url) {
+            errorEl.textContent = 'Por favor, informe uma URL';
+            return false;
+        }
+
+        try {
+            const parsed = new URL(url);
+            if (!['http:', 'https:'].includes(parsed.protocol)) {
+                errorEl.textContent = 'Por favor, informe uma URL valida (http:// ou https://)';
+                return false;
+            }
+        } catch {
+            errorEl.textContent = 'Por favor, informe uma URL valida (http:// ou https://)';
+            return false;
+        }
+
+        errorEl.textContent = '';
+        return true;
+    },
+
+    validateQuery() {
+        const query = document.getElementById('query').value.trim();
+        const errorEl = document.getElementById('query-error');
+
+        if (!query) {
+            errorEl.textContent = 'Por favor, informe o que deseja buscar';
+            return false;
+        }
+
+        errorEl.textContent = '';
+        return true;
+    },
+
+    // Form Data
+    saveCurrentStepData() {
+        switch (this.state.currentStep) {
+            case 1:
+                this.state.url = document.getElementById('url').value.trim();
+                break;
+            case 4:
+                this.state.query = document.getElementById('query').value.trim();
+                break;
+        }
+    },
+
+    selectRadioCard(card, type) {
+        const container = card.closest('.radio-cards');
+        container.querySelectorAll('.radio-card').forEach(c => {
+            c.classList.remove('selected');
+            c.setAttribute('aria-checked', 'false');
+        });
+
+        card.classList.add('selected');
+        card.setAttribute('aria-checked', 'true');
+
+        if (type === 'mode') {
+            this.state.mode = card.dataset.value;
+        } else if (type === 'strategy') {
+            this.state.strategy = card.dataset.value;
+            this.updateStrategyDescription();
+        }
+    },
+
+    updateStrategyDescription() {
+        const descriptions = {
+            css: 'Buscar por seletor CSS',
+            xpath: 'Buscar por expressao XPath',
+            text: 'Buscar por texto visivel na pagina',
+            html_snippet: 'Buscar por trecho de HTML'
+        };
+        document.getElementById('strategy-description').textContent = descriptions[this.state.strategy];
+    },
+
+    updateQueryPlaceholder() {
+        const placeholders = {
+            css: 'Digite o seletor CSS (ex: .btn-primary)',
+            xpath: 'Digite a expressao XPath',
+            text: 'Digite o texto do botao, titulo ou elemento...',
+            html_snippet: 'Cole o trecho HTML do elemento'
+        };
+        document.getElementById('query').placeholder = placeholders[this.state.strategy];
+    },
+
+    // Extraction
+    async startExtraction() {
+        if (!this.validateCurrentStep()) return;
+
+        this.saveCurrentStepData();
+        this.showState('progress');
+        this.state.isExtracting = true;
+
+        try {
+            const response = await fetch('/api/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: this.state.url,
+                    mode: this.state.mode,
+                    strategy: this.state.strategy,
+                    query: this.state.query
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Falha ao iniciar extracao');
+            }
+
+            const { task_id } = await response.json();
+            this.state.taskId = task_id;
+            this.connectProgressStream(task_id);
+
+        } catch (error) {
+            this.showError('Erro ao iniciar extracao. Verifique a conexao.');
+        }
+    },
+
+    connectProgressStream(taskId) {
+        this.state.eventSource = new EventSource(`/api/extract/${taskId}/progress`);
+
+        this.state.eventSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            this.updateProgress(data);
+
+            if (data.done) {
+                this.state.eventSource.close();
+                if (data.step_name === 'complete') {
+                    this.fetchResult(taskId);
+                } else {
+                    this.showError(data.message);
+                }
+            }
+        };
+
+        this.state.eventSource.onerror = () => {
+            this.state.eventSource.close();
+            if (this.state.isExtracting) {
+                this.showError('Conexao perdida durante a extracao');
+            }
+        };
+    },
+
+    updateProgress(data) {
+        const fill = document.querySelector('.progress-fill');
+        const percent = document.querySelector('.progress-percent');
+        const message = document.getElementById('progress-message');
+        const bar = document.querySelector('.progress-bar');
+
+        const pct = Math.round((data.step / data.total_steps) * 100);
+        fill.style.width = `${pct}%`;
+        percent.textContent = `${pct}%`;
+        message.textContent = data.message;
+
+        bar.setAttribute('aria-valuenow', pct);
+    },
+
+    async fetchResult(taskId) {
+        try {
+            const response = await fetch(`/api/extract/${taskId}/result`);
+            const result = await response.json();
+            this.showResult(result);
+            this.showToast('Extracao concluida!', 'success');
+        } catch (error) {
+            this.showError('Erro ao obter resultado');
+        }
+    },
+
+    cancelExtraction() {
+        if (this.state.eventSource) {
+            this.state.eventSource.close();
+        }
+
+        if (this.state.taskId) {
+            fetch(`/api/extract/${this.state.taskId}/cancel`, { method: 'POST' })
+                .catch(() => {});
+        }
+
+        this.state.isExtracting = false;
+        this.goToStep(4);
+        this.showToast('Extracao cancelada', 'error');
+    },
+
+    resetExtraction() {
+        this.state.query = '';
+        document.getElementById('query').value = '';
+        this.state.isExtracting = false;
+        this.state.lastError = null;
+        this.goToStep(1);
+    },
+
+    // State Transitions
+    showState(stateName) {
+        document.querySelectorAll('.wizard-step').forEach(step => {
+            step.classList.add('hidden');
+        });
+
+        const targetState = document.querySelector(`.wizard-step[data-state="${stateName}"]`);
+        if (targetState) {
+            targetState.classList.remove('hidden');
+        }
+    },
+
+    showError(message) {
+        this.state.isExtracting = false;
+        this.state.lastError = message;
+        document.getElementById('error-text').textContent = message;
+        this.showState('error');
+    },
+
+    showResult(result) {
+        this.state.isExtracting = false;
+        this.showState('result');
+
+        document.getElementById('prompt-text').textContent = result.prompt;
+
+        const screenshotContainer = document.getElementById('screenshot-container');
+        const screenshotImg = document.getElementById('screenshot-img');
+        if (result.screenshot_path) {
+            screenshotImg.src = `/screenshots/${result.screenshot_path}`;
+            screenshotContainer.classList.remove('hidden');
+        } else {
+            screenshotContainer.classList.add('hidden');
+        }
+
+        document.getElementById('json-text').textContent = JSON.stringify(result.full_json, null, 2);
+
+        const assetsList = document.getElementById('assets-list');
+        assetsList.innerHTML = result.assets.map(a => `
+            <li>${a.type}: ${a.local_path}</li>
+        `).join('');
+
+        this.switchTab('prompt');
+    },
+
+    // Tabs
+    switchTab(tabName) {
+        document.querySelectorAll('.tab').forEach(t => {
+            const isActive = t.dataset.tab === tabName;
+            t.classList.toggle('active', isActive);
+            t.setAttribute('aria-selected', isActive);
+        });
+
+        document.querySelectorAll('.tab-content').forEach(c => {
+            c.classList.toggle('hidden', c.dataset.content !== tabName);
+            c.classList.toggle('active', c.dataset.content === tabName);
+        });
+    },
+
+    // Utilities
+    async copyPrompt() {
+        const text = document.getElementById('prompt-text').textContent;
+        await navigator.clipboard.writeText(text);
+        this.showToast('Copiado!', 'success');
+    },
+
+    showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        toast.setAttribute('role', 'alert');
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'slideIn 0.3s ease reverse';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+
+    // Theme
+    toggleTheme() {
+        const html = document.documentElement;
+        const current = html.dataset.theme;
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.dataset.theme = next;
+        localStorage.setItem('theme', next);
+    },
+
+    loadTheme() {
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.dataset.theme = saved;
+    },
+
+    // Keyboard Navigation
+    initKeyboardNav() {
+        document.addEventListener('keydown', (e) => {
+            // Escape to cancel extraction
+            if (e.key === 'Escape' && this.state.isExtracting) {
+                this.cancelExtraction();
+            }
+
+            // Enter to advance in input fields
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                const step = document.querySelector(`.wizard-step[data-step="${this.state.currentStep}"]`);
+                if (step && !step.classList.contains('hidden')) {
+                    const nextBtn = step.querySelector('.btn-primary');
+                    if (nextBtn && document.activeElement.tagName !== 'BUTTON') {
+                        nextBtn.click();
+                    }
+                }
+            }
+        });
     }
-`;
-document.head.appendChild(style);
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
