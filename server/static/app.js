@@ -82,3 +82,76 @@ const App = {
             document.getElementById('query-error').textContent = '';
         });
     },
+
+    // Navigation
+    nextStep() {
+        if (!this.validateCurrentStep()) return;
+
+        this.saveCurrentStepData();
+
+        // Skip step 3 if mode is full_page
+        if (this.state.currentStep === 2 && this.state.mode === 'full_page') {
+            this.goToStep(4);
+            return;
+        }
+
+        if (this.state.currentStep < this.state.totalSteps) {
+            this.goToStep(this.state.currentStep + 1);
+        }
+    },
+
+    prevStep() {
+        if (this.state.currentStep > 1) {
+            // Skip step 3 if mode is full_page
+            if (this.state.currentStep === 4 && this.state.mode === 'full_page') {
+                this.goToStep(2);
+                return;
+            }
+            this.goToStep(this.state.currentStep - 1);
+        }
+    },
+
+    goToStep(stepNum) {
+        const prevStep = this.state.currentStep;
+        this.state.currentStep = stepNum;
+
+        // Hide all steps
+        document.querySelectorAll('.wizard-step[data-step]').forEach(step => {
+            step.classList.add('hidden');
+        });
+        document.querySelectorAll('.wizard-step[data-state]').forEach(step => {
+            step.classList.add('hidden');
+        });
+
+        // Show target step
+        const targetStep = document.querySelector(`.wizard-step[data-step="${stepNum}"]`);
+        if (targetStep) {
+            targetStep.classList.remove('hidden');
+            targetStep.classList.remove('slide-left', 'slide-right');
+            if (stepNum > prevStep) {
+                targetStep.classList.add('slide-left');
+            } else if (stepNum < prevStep) {
+                targetStep.classList.add('slide-right');
+            }
+        }
+
+        this.updateDots();
+
+        if (stepNum === 4) {
+            this.updateQueryPlaceholder();
+        }
+
+        const firstInput = targetStep?.querySelector('input, textarea');
+        if (firstInput) {
+            setTimeout(() => firstInput.focus(), 100);
+        }
+    },
+
+    updateDots() {
+        document.querySelectorAll('.dot').forEach((dot, index) => {
+            // Only current step dot is active (spec: oc oo oo for step 2)
+            const isActive = index === this.state.currentStep - 1;
+            dot.classList.toggle('active', isActive);
+            dot.setAttribute('aria-current', isActive ? 'step' : 'false');
+        });
+    },
