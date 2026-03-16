@@ -552,3 +552,107 @@
 @media (prefers-reduced-motion: reduce) {
     .toast { animation: none; }
 }
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+#theme-toggle {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    padding: 0.5rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+#theme-toggle:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Base Layout */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    transition: background 0.3s, color 0.3s;
+}
+
+/* Responsive - Tablet (768px - 1024px) */
+@media (max-width: 1024px) {
+    .wizard-card {
+        max-width: 500px;
+    }
+
+    .radio-cards.strategy-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Responsive - Mobile (< 768px) */
+@media (max-width: 768px) {
+    .wizard-container {
+        padding: 0;
+        min-height: calc(100vh - 50px);
+    }
+
+    .wizard-card {
+        border-radius: 0;
+        padding: 1.5rem;
+        max-width: 100%;
+        min-height: calc(100vh - 50px);
+    }
+
+    .step-title {
+        font-size: 1.25rem;
+    }
+
+    .radio-cards.strategy-cards {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+    }
+
+    .strategy-cards .radio-card {
+        padding: 0.5rem;
+    }
+
+    .strategy-cards .radio-label {
+        font-size: 0.75rem;
+    }
+
+    .wizard-actions {
+        flex-direction: column-reverse;
+    }
+
+    .wizard-actions button {
+        width: 100%;
+    }
+
+    header {
+        padding: 0.75rem 1rem;
+    }
+
+    header h1 {
+        font-size: 1rem;
+    }
+}
