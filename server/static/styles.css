@@ -1,0 +1,87 @@
+/* CSS Variables */
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --text-primary: #eaeaea;
+    --text-secondary: #a0a0a0;
+    --accent: #e94560;
+    --accent-hover: #ff6b6b;
+    --border: #2a2a4a;
+    --success: #4ade80;
+    --error: #f87171;
+}
+
+[data-theme="light"] {
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e9ecef;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --border: #dee2e6;
+}
+
+/* Wizard Layout */
+.wizard-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 60px);
+    padding: 1rem;
+}
+
+.wizard-card {
+    width: 100%;
+    max-width: 600px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+/* Wizard Steps */
+.wizard-step {
+    animation: fadeIn 0.25s ease-out;
+}
+
+.wizard-step.hidden {
+    display: none;
+}
+
+.wizard-step.centered {
+    text-align: center;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wizard-step { animation: none; }
+}
+
+/* Slide transitions */
+.wizard-step.slide-left {
+    animation: slideLeft 0.25s ease-out;
+}
+
+.wizard-step.slide-right {
+    animation: slideRight 0.25s ease-out;
+}
+
+@keyframes slideLeft {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideRight {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wizard-step.slide-left,
+    .wizard-step.slide-right { animation: none; }
+}
