@@ -1,9 +1,23 @@
 """Tests for BrowserManager."""
 
+import subprocess
+import sys
+import textwrap
+
 import pytest
 
 from collector.browser import BrowserManager
 from models.errors import NavigationError
+
+
+def run_browser_manager_script(script_body: str) -> subprocess.CompletedProcess[str]:
+    """Run BrowserManager startup checks in a clean subprocess."""
+    return subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(script_body)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 class TestBrowserManagerStart:
@@ -11,29 +25,39 @@ class TestBrowserManagerStart:
 
     def test_start_creates_browser_and_page(self):
         """start() should create playwright, browser, and page instances."""
-        manager = BrowserManager(headless=True)
+        result = run_browser_manager_script(
+            """
+            from collector.browser import BrowserManager
 
-        assert manager.playwright is None
-        assert manager.browser is None
-        assert manager.page is None
+            manager = BrowserManager(headless=True)
+            assert manager.playwright is None
+            assert manager.browser is None
+            assert manager.page is None
 
-        manager.start()
+            manager.start()
+            assert manager.playwright is not None
+            assert manager.browser is not None
+            assert manager.page is not None
+            manager.close()
+            """
+        )
 
-        assert manager.playwright is not None
-        assert manager.browser is not None
-        assert manager.page is not None
-
-        manager.close()
+        assert result.returncode == 0, result.stderr
 
     def test_start_with_headless_true(self):
         """start() with headless=True should launch headless browser."""
-        manager = BrowserManager(headless=True)
-        manager.start()
+        result = run_browser_manager_script(
+            """
+            from collector.browser import BrowserManager
 
-        # Browser should be connected
-        assert manager.browser.is_connected()
+            manager = BrowserManager(headless=True)
+            manager.start()
+            assert manager.browser.is_connected()
+            manager.close()
+            """
+        )
 
-        manager.close()
+        assert result.returncode == 0, result.stderr
 
 
 class TestBrowserManagerNavigate:

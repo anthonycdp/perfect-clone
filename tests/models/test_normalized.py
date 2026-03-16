@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from models.normalized import (
+    BaseNormalizedOutput,
     PageInfo,
     TargetInfo,
     DOMTree,
@@ -11,9 +12,13 @@ from models.normalized import (
     AnimationSummary,
     InteractionSummary,
     ResponsiveBehavior,
+    PageSectionSummary,
+    PageCaptureInfo,
     NormalizedOutput,
+    FullPageNormalizedOutput,
 )
 from models.extraction import (
+    ExtractionMode,
     SelectorStrategy,
     BoundingBox,
     InteractionType,
@@ -71,12 +76,20 @@ class TestTargetInfo:
             html="<div class=\"hero-section\">Content</div>",
             bounding_box=BoundingBox(x=0, y=100, width=1200, height=600),
             depth_in_dom=5,
+            screenshot_path="/output/screenshots/target.png",
+            frame_url="https://example.com",
+            frame_name="main",
+            same_origin_accessible=True,
+            frame_limitations=[],
         )
         assert target_info.selector_used == ".hero-section"
         assert target_info.strategy == SelectorStrategy.CSS
         assert target_info.html == "<div class=\"hero-section\">Content</div>"
         assert target_info.bounding_box.width == 1200
         assert target_info.depth_in_dom == 5
+        assert target_info.screenshot_path == "/output/screenshots/target.png"
+        assert target_info.frame_url == "https://example.com"
+        assert target_info.frame_name == "main"
 
     def test_target_info_with_string_strategy(self):
         """TargetInfo should accept string for strategy."""
@@ -86,8 +99,11 @@ class TestTargetInfo:
             html="<div id=\"content\">Text</div>",
             bounding_box=BoundingBox(x=10, y=20, width=500, height=300),
             depth_in_dom=3,
+            frame_limitations=["Limited"],
         )
         assert target_info.strategy == SelectorStrategy.XPATH
+        assert target_info.screenshot_path is None
+        assert target_info.frame_limitations == ["Limited"]
 
     def test_target_info_requires_all_fields(self):
         """TargetInfo should require all fields."""
@@ -379,6 +395,11 @@ class TestNormalizedOutput:
             html="<div>Test</div>",
             bounding_box=BoundingBox(x=0, y=0, width=100, height=100),
             depth_in_dom=1,
+            screenshot_path="/output/screenshots/target.png",
+            frame_url="https://example.com",
+            frame_name=None,
+            same_origin_accessible=True,
+            frame_limitations=["Frame stylesheets blocked"],
         )
         dom_tree = DOMTree(
             tag="div",
@@ -451,8 +472,123 @@ class TestNormalizedOutput:
         assert output.assets[0].type == AssetType.IMAGE
         assert len(output.external_libraries) == 1
         assert output.external_libraries[0].name == "jQuery"
+        assert output.mode == ExtractionMode.COMPONENT
+        assert output.get_primary_screenshot_path() == "/output/screenshots/target.png"
+        assert output.target.frame_limitations == ["Frame stylesheets blocked"]
 
     def test_normalized_output_requires_all_fields(self):
         """NormalizedOutput should require all component models."""
         with pytest.raises(ValidationError):
             NormalizedOutput()
+
+
+class TestPageSectionSummary:
+    """Tests for landing page section summaries."""
+
+    def test_page_section_summary(self):
+        """PageSectionSummary should capture basic section metadata."""
+        section = PageSectionSummary(
+            name="Hero",
+            selector="section.hero",
+            tag="section",
+            text_excerpt="Launch your product faster",
+            bounding_box=BoundingBox(x=0, y=0, width=1440, height=680),
+        )
+
+        assert section.name == "Hero"
+        assert section.selector == "section.hero"
+        assert section.bounding_box.height == 680
+
+
+class TestPageCaptureInfo:
+    """Tests for full-page capture metadata."""
+
+    def test_page_capture_info(self):
+        """PageCaptureInfo should store screenshot and section data."""
+        capture = PageCaptureInfo(
+            html="<body><section>Hero</section></body>",
+            screenshot_path="/output/screenshots/page.png",
+            bounding_box=BoundingBox(x=0, y=0, width=1440, height=3200),
+            scroll_completed=True,
+            sections=[
+                PageSectionSummary(
+                    name="Hero",
+                    selector="section.hero",
+                    tag="section",
+                    text_excerpt="Build faster",
+                    bounding_box=BoundingBox(x=0, y=0, width=1440, height=640),
+                )
+            ],
+        )
+
+        assert capture.scroll_completed is True
+        assert capture.screenshot_path == "/output/screenshots/page.png"
+        assert len(capture.sections) == 1
+
+
+class TestFullPageNormalizedOutput:
+    """Tests for full-page normalized output."""
+
+    def test_full_page_output_with_all_fields(self):
+        """FullPageNormalizedOutput should store landing page capture data."""
+        page_info = PageInfo(
+            url="https://example.com",
+            title="Landing",
+            viewport={"width": 1440, "height": 900},
+            loaded_scripts=[],
+            loaded_stylesheets=[],
+        )
+        dom_tree = DOMTree(
+            tag="body",
+            attributes={},
+            children=[],
+            text_content="",
+            computed_styles={},
+        )
+        style_summary = StyleSummary(
+            layout={},
+            spacing={},
+            typography={},
+            colors={},
+            effects={},
+        )
+        animation_summary = AnimationSummary(
+            css_animations=[],
+            css_transitions=[],
+            scroll_effects=[],
+            recording=None,
+        )
+        interaction_summary = InteractionSummary(
+            hoverable_elements=[],
+            clickable_elements=[],
+            focusable_elements=[],
+            scroll_containers=[],
+            observed_states={},
+        )
+        responsive_behavior = ResponsiveBehavior(
+            breakpoints=[],
+            is_fluid=True,
+            has_mobile_menu=True,
+            grid_changes=[],
+        )
+
+        output = FullPageNormalizedOutput(
+            page=page_info,
+            page_capture=PageCaptureInfo(
+                html="<body><section>Hero</section></body>",
+                screenshot_path="/output/screenshots/page.png",
+                bounding_box=BoundingBox(x=0, y=0, width=1440, height=3200),
+                scroll_completed=True,
+                sections=[],
+            ),
+            dom=dom_tree,
+            styles=style_summary,
+            animations=animation_summary,
+            interactions=interaction_summary,
+            responsive_behavior=responsive_behavior,
+            assets=[],
+            external_libraries=[],
+        )
+
+        assert output.mode == ExtractionMode.FULL_PAGE
+        assert output.get_primary_screenshot_path() == "/output/screenshots/page.png"

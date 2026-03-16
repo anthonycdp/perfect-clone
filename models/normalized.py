@@ -2,15 +2,16 @@
 
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from models.extraction import (
     AnimationData,
     AnimationRecording,
     Asset,
     BoundingBox,
+    ExtractionMode,
     ExternalLibrary,
-    InteractionState,
+    RichMediaType,
     ResponsiveBreakpoint,
     SelectorStrategy,
     TransitionData,
@@ -35,6 +36,12 @@ class TargetInfo(BaseModel):
     html: str
     bounding_box: BoundingBox
     depth_in_dom: int
+    screenshot_path: Optional[str] = None
+    frame_url: Optional[str] = None
+    frame_name: Optional[str] = None
+    same_origin_accessible: bool = True
+    within_shadow_dom: bool = False
+    frame_limitations: list[str] = Field(default_factory=list)
 
 
 class DOMTree(BaseModel):
@@ -49,6 +56,7 @@ class DOMTree(BaseModel):
     children: list["DOMTree"]
     text_content: str
     computed_styles: dict[str, Any]
+    shadow_root: "DOMTree | None" = None
 
 
 # Rebuild the model to resolve forward references for recursive structure
@@ -81,7 +89,7 @@ class InteractionSummary(BaseModel):
     clickable_elements: list[str]
     focusable_elements: list[str]
     scroll_containers: list[str]
-    observed_states: dict[str, InteractionState]
+    observed_states: dict[str, Any]
 
 
 class ResponsiveBehavior(BaseModel):
@@ -93,14 +101,24 @@ class ResponsiveBehavior(BaseModel):
     grid_changes: list[dict[str, Any]]
 
 
-class NormalizedOutput(BaseModel):
-    """Combined normalized output from extraction.
+class RichMediaCapture(BaseModel):
+    """Captured runtime media metadata and snapshots."""
 
-    Combines all normalized models into a single output structure.
-    """
+    type: RichMediaType
+    selector: str
+    bounding_box: BoundingBox
+    source_urls: list[str] = Field(default_factory=list)
+    poster_url: Optional[str] = None
+    snapshot_path: Optional[str] = None
+    playback_flags: dict[str, bool] = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list)
 
+
+class BaseNormalizedOutput(BaseModel):
+    """Shared normalized data for every extraction mode."""
+
+    mode: ExtractionMode
     page: PageInfo
-    target: TargetInfo
     dom: DOMTree
     styles: StyleSummary
     animations: AnimationSummary
@@ -108,3 +126,51 @@ class NormalizedOutput(BaseModel):
     responsive_behavior: ResponsiveBehavior
     assets: list[Asset]
     external_libraries: list[ExternalLibrary]
+    rich_media: list[RichMediaCapture] = Field(default_factory=list)
+    collection_limitations: list[str] = Field(default_factory=list)
+
+    def get_primary_screenshot_path(self) -> str | None:
+        """Return the primary screenshot path associated with this extraction."""
+        return None
+
+
+class PageSectionSummary(BaseModel):
+    """High-level section detected within a full-page extraction."""
+
+    name: str
+    selector: str
+    tag: str
+    text_excerpt: str
+    bounding_box: BoundingBox
+
+
+class PageCaptureInfo(BaseModel):
+    """Full-page specific metadata captured during extraction."""
+
+    html: str
+    screenshot_path: Optional[str] = None
+    bounding_box: BoundingBox
+    scroll_completed: bool
+    sections: list[PageSectionSummary]
+
+
+class NormalizedOutput(BaseNormalizedOutput):
+    """Normalized output for single-component extraction."""
+
+    mode: ExtractionMode = ExtractionMode.COMPONENT
+    target: TargetInfo
+
+    def get_primary_screenshot_path(self) -> str | None:
+        """Return the target screenshot when available."""
+        return self.target.screenshot_path
+
+
+class FullPageNormalizedOutput(BaseNormalizedOutput):
+    """Normalized output for full-page extraction."""
+
+    mode: ExtractionMode = ExtractionMode.FULL_PAGE
+    page_capture: PageCaptureInfo
+
+    def get_primary_screenshot_path(self) -> str | None:
+        """Return the full-page screenshot when available."""
+        return self.page_capture.screenshot_path

@@ -3,8 +3,9 @@
 import re
 from typing import Any
 
-from playwright.sync_api import Locator, Page
+from playwright.async_api import Locator, Page
 
+from collector.extraction_scope import ExtractionScope
 from models.extraction import ResponsiveBreakpoint
 from models.normalized import ResponsiveBehavior
 
@@ -26,14 +27,15 @@ class ResponsiveCollector:
         """
         self.page = page
 
-    def detect_breakpoints(self) -> list[int]:
+    async def detect_breakpoints(self, scope: ExtractionScope | None = None) -> list[int]:
         """Extract breakpoints from CSS media queries via CSSOM.
 
         Returns:
             List of breakpoint widths in pixels.
         """
+        context = scope.frame if scope is not None else self.page
         try:
-            breakpoints = self.page.evaluate("""() => {
+            breakpoints = await context.evaluate("""() => {
                 const breakpoints = new Set();
                 const sheets = document.styleSheets;
 
@@ -76,7 +78,7 @@ class ResponsiveCollector:
             # Return standard breakpoints on error
             return list(self.STANDARD_BREAKPOINTS)
 
-    def collect_at_viewport(
+    async def collect_at_viewport(
         self, target: Locator, width: int, height: int
     ) -> dict[str, Any]:
         """Capture component state at specific viewport.
@@ -90,10 +92,10 @@ class ResponsiveCollector:
             Dictionary of computed styles and layout properties.
         """
         # Set viewport size
-        self.page.set_viewport_size({"width": width, "height": height})
+        await self.page.set_viewport_size({"width": width, "height": height})
 
         # Capture element state
-        return target.evaluate("""el => {
+        return await target.evaluate("""el => {
             const styles = window.getComputedStyle(el);
             const rect = el.getBoundingClientRect();
 
@@ -134,7 +136,11 @@ class ResponsiveCollector:
             };
         }""")
 
-    def collect_all(self, target: Locator) -> ResponsiveBehavior:
+    async def collect_all(
+        self,
+        target: Locator,
+        scope: ExtractionScope | None = None,
+    ) -> ResponsiveBehavior:
         """Collect responsive behavior at all breakpoints.
 
         Args:
@@ -144,7 +150,7 @@ class ResponsiveCollector:
             ResponsiveBehavior object with breakpoint data.
         """
         # Detect media query breakpoints
-        detected_breakpoints = self.detect_breakpoints()
+        detected_breakpoints = await self.detect_breakpoints(scope=scope)
 
         # Combine with standard breakpoints, deduplicated and sorted
         all_breakpoints = sorted(
@@ -163,7 +169,7 @@ class ResponsiveCollector:
             height = int(width * 0.75)
 
             try:
-                state = self.collect_at_viewport(target, width, height)
+                state = await self.collect_at_viewport(target, width, height)
 
                 # Calculate style diff from previous breakpoint
                 styles_diff = {}

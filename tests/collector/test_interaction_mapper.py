@@ -115,3 +115,18 @@ class TestInteractionMapper:
         )
         # Just verify it completes without error
         assert isinstance(all_selectors, list)
+
+    def test_map_detects_hover_classes(
+        self, mapper: InteractionMapper, page: Page
+    ) -> None:
+        """map() should detect utility-class based hover styles."""
+        page.set_content("""
+            <html><body>
+                <button class="hover:bg-slate-900 transition">Hover me</button>
+            </body></html>
+        """)
+        target = page.locator("body")
+
+        result = mapper.map(target)
+
+        assert any(item["selector"].startswith("button") for item in result["hoverable"])

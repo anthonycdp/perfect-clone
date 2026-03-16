@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from playwright.sync_api import Locator, Page
+from playwright.async_api import Locator, Page
 
 
 class InteractionMapper:
@@ -16,7 +16,7 @@ class InteractionMapper:
         """
         self.page = page
 
-    def map(self, target: Locator) -> dict[str, list[dict[str, Any]]]:
+    async def map(self, target: Locator) -> dict[str, list[dict[str, Any]]]:
         """Map all interactive elements within the target.
 
         Args:
@@ -37,27 +37,27 @@ class InteractionMapper:
         }
 
         # Get the selector for the target if possible
-        target_selector = self._get_target_selector(target)
+        target_selector = await self._get_target_selector(target)
 
         # Find clickable elements (links, buttons, elements with onclick)
-        result["clickable"] = self._find_clickable(target, target_selector)
+        result["clickable"] = await self._find_clickable(target, target_selector)
 
         # Find focusable elements (links, inputs, buttons, elements with tabindex)
-        result["focusable"] = self._find_focusable(target, target_selector)
+        result["focusable"] = await self._find_focusable(target, target_selector)
 
         # Find hoverable elements (elements with :hover styles)
-        result["hoverable"] = self._find_hoverable(target, target_selector)
+        result["hoverable"] = await self._find_hoverable(target, target_selector)
 
         # Find scroll containers
-        result["scroll_containers"] = self._find_scroll_containers(target, target_selector)
+        result["scroll_containers"] = await self._find_scroll_containers(target, target_selector)
 
         return result
 
-    def _get_target_selector(self, target: Locator) -> str:
+    async def _get_target_selector(self, target: Locator) -> str:
         """Try to get a CSS selector for the target element."""
         try:
             # Try to evaluate and get a unique selector
-            selector = target.evaluate("""el => {
+            selector = await target.evaluate("""el => {
                 if (el.id) return '#' + el.id;
                 if (el.className && typeof el.className === 'string') {
                     return el.tagName.toLowerCase() + '.' + el.className.split(' ').join('.');
@@ -68,7 +68,7 @@ class InteractionMapper:
         except Exception:
             return "body"
 
-    def _find_clickable(
+    async def _find_clickable(
         self, target: Locator, target_selector: str
     ) -> list[dict[str, Any]]:
         """Find clickable elements within target."""
@@ -88,12 +88,12 @@ class InteractionMapper:
         for selector in clickable_selectors:
             try:
                 locator = target.locator(selector)
-                count = locator.count()
+                count = await locator.count()
 
                 for i in range(count):
                     try:
                         el = locator.nth(i)
-                        element_info = self._get_element_info(el)
+                        element_info = await self._get_element_info(el)
                         if element_info and not self._is_duplicate(elements, element_info["selector"]):
                             elements.append(element_info)
                     except Exception:
@@ -103,7 +103,7 @@ class InteractionMapper:
 
         return elements
 
-    def _find_focusable(
+    async def _find_focusable(
         self, target: Locator, target_selector: str
     ) -> list[dict[str, Any]]:
         """Find focusable elements within target."""
@@ -122,19 +122,19 @@ class InteractionMapper:
         for selector in focusable_selectors:
             try:
                 locator = target.locator(selector)
-                count = locator.count()
+                count = await locator.count()
 
                 for i in range(count):
                     try:
                         el = locator.nth(i)
                         # Check if element is actually focusable (not disabled, not hidden)
-                        is_focusable = el.evaluate("""el => {
+                        is_focusable = await el.evaluate("""el => {
                             return !el.disabled &&
                                    el.tabIndex >= 0 &&
                                    el.offsetParent !== null;
                         }""")
                         if is_focusable:
-                            element_info = self._get_element_info(el)
+                            element_info = await self._get_element_info(el)
                             if element_info and not self._is_duplicate(elements, element_info["selector"]):
                                 elements.append(element_info)
                     except Exception:
@@ -144,7 +144,7 @@ class InteractionMapper:
 
         return elements
 
-    def _find_hoverable(
+    async def _find_hoverable(
         self, target: Locator, target_selector: str
     ) -> list[dict[str, Any]]:
         """Find elements that respond to hover."""
@@ -153,12 +153,31 @@ class InteractionMapper:
         try:
             # Get all elements and check if they have :hover styles
             all_elements = target.locator("*")
-            count = all_elements.count()
+            count = await all_elements.count()
 
             for i in range(count):
                 try:
                     el = all_elements.nth(i)
-                    has_hover = el.evaluate("""el => {
+                    has_hover = await el.evaluate("""el => {
+                        const className = typeof el.className === 'string' ? el.className : '';
+                        if (
+                            className.includes('hover:') ||
+                            className.includes('group-hover:') ||
+                            className.includes(':hover')
+                        ) {
+                            return true;
+                        }
+
+                        const inlineCursor = el.style?.cursor || '';
+                        if (inlineCursor === 'pointer') {
+                            return true;
+                        }
+
+                        const computedCursor = window.getComputedStyle(el).cursor;
+                        if (computedCursor === 'pointer') {
+                            return true;
+                        }
+
                         // Check if element has any :hover styles defined
                         const sheets = document.styleSheets;
                         let hasHover = false;
@@ -195,7 +214,7 @@ class InteractionMapper:
                     }""")
 
                     if has_hover:
-                        element_info = self._get_element_info(el)
+                        element_info = await self._get_element_info(el)
                         if element_info and not self._is_duplicate(elements, element_info["selector"]):
                             elements.append(element_info)
                 except Exception:
@@ -205,7 +224,7 @@ class InteractionMapper:
 
         return elements
 
-    def _find_scroll_containers(
+    async def _find_scroll_containers(
         self, target: Locator, target_selector: str
     ) -> list[dict[str, Any]]:
         """Find scrollable containers within target."""
@@ -213,12 +232,12 @@ class InteractionMapper:
 
         try:
             all_elements = target.locator("*")
-            count = all_elements.count()
+            count = await all_elements.count()
 
             for i in range(count):
                 try:
                     el = all_elements.nth(i)
-                    is_scrollable = el.evaluate("""el => {
+                    is_scrollable = await el.evaluate("""el => {
                         const style = window.getComputedStyle(el);
                         const overflow = style.overflow + style.overflowY + style.overflowX;
                         return (overflow.includes('auto') || overflow.includes('scroll')) &&
@@ -226,7 +245,7 @@ class InteractionMapper:
                     }""")
 
                     if is_scrollable:
-                        element_info = self._get_element_info(el)
+                        element_info = await self._get_element_info(el)
                         if element_info and not self._is_duplicate(elements, element_info["selector"]):
                             elements.append(element_info)
                 except Exception:
@@ -236,10 +255,10 @@ class InteractionMapper:
 
         return elements
 
-    def _get_element_info(self, element: Locator) -> dict[str, Any] | None:
+    async def _get_element_info(self, element: Locator) -> dict[str, Any] | None:
         """Get information about an element."""
         try:
-            info = element.evaluate("""el => {
+            info = await element.evaluate("""el => {
                 // Generate a unique selector
                 let selector = '';
 

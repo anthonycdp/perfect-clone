@@ -14,6 +14,7 @@ class ExtractionWorker(threading.Thread):
         self,
         orchestrator: ExtractionOrchestrator,
         url: str,
+        extraction_mode: str,
         strategy: str,
         query: str,
         callback_queue: queue.Queue,
@@ -21,6 +22,7 @@ class ExtractionWorker(threading.Thread):
         super().__init__()
         self.orchestrator = orchestrator
         self.url = url
+        self.extraction_mode = extraction_mode
         self.strategy = strategy
         self.query = query
         self.callback_queue = callback_queue
@@ -33,6 +35,7 @@ class ExtractionWorker(threading.Thread):
                 self.url,
                 self.strategy,
                 self.query,
+                extraction_mode=self.extraction_mode,
                 progress_callback=self._progress_callback,
                 cancel_check=self._cancel_event.is_set,
             )

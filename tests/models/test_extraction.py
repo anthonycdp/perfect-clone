@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from models.extraction import (
+    ExtractionMode,
     SelectorStrategy,
     InteractionType,
     AssetType,
@@ -16,6 +17,22 @@ from models.extraction import (
     ResponsiveBreakpoint,
     AnimationRecording,
 )
+
+
+class TestExtractionMode:
+    """Tests for ExtractionMode enum."""
+
+    def test_component_value(self):
+        """ExtractionMode.COMPONENT should be 'component'."""
+        assert ExtractionMode.COMPONENT == "component"
+
+    def test_full_page_value(self):
+        """ExtractionMode.FULL_PAGE should be 'full_page'."""
+        assert ExtractionMode.FULL_PAGE == "full_page"
+
+    def test_all_values_count(self):
+        """ExtractionMode should have 2 values."""
+        assert len(ExtractionMode) == 2
 
 
 class TestSelectorStrategy:

@@ -3,8 +3,9 @@
 import re
 from typing import Any
 
-from playwright.sync_api import Page
+from playwright.async_api import Page
 
+from collector.extraction_scope import ExtractionScope
 from models.extraction import ExternalLibrary
 
 
@@ -47,17 +48,41 @@ class LibraryDetector:
             page: Playwright Page object to analyze.
         """
         self.page = page
+        self.last_limitations: list[str] = []
 
-    def detect(self) -> list[ExternalLibrary]:
+    async def detect(self, scope: ExtractionScope | None = None) -> list[ExternalLibrary]:
         """Detect all external libraries on page.
 
         Returns:
             List of detected ExternalLibrary objects.
         """
-        # Gather data from the page
-        page_data = self._gather_page_data()
-
+        self.last_limitations = []
         detected: dict[str, ExternalLibrary] = {}
+        for context_name, context in self._get_detection_contexts(scope):
+            page_data = await self._gather_page_data(context, context_name)
+            self._merge_page_data(detected, page_data)
+
+        return list(detected.values())
+
+    def _get_detection_contexts(
+        self,
+        scope: ExtractionScope | None,
+    ) -> list[tuple[str, Any]]:
+        """Return the contexts that should contribute library signals."""
+        if scope is None:
+            return [("page", self.page)]
+
+        contexts: list[tuple[str, Any]] = [("frame", scope.frame)]
+        if scope.frame != self.page.main_frame:
+            contexts.append(("page", self.page))
+        return contexts
+
+    def _merge_page_data(
+        self,
+        detected: dict[str, ExternalLibrary],
+        page_data: dict[str, Any],
+    ) -> None:
+        """Merge one document worth of library signals into the shared output."""
 
         # Check script URLs
         for script in page_data.get("scripts", []):
@@ -94,18 +119,21 @@ class LibraryDetector:
             snippets = self._extract_usage_snippets(
                 lib_name, inline_scripts, globals_found
             )
-            detected[lib_name].usage_snippets = snippets
+            merged_snippets = detected[lib_name].usage_snippets + snippets
+            deduped_snippets: list[str] = []
+            for snippet in merged_snippets:
+                if snippet and snippet not in deduped_snippets:
+                    deduped_snippets.append(snippet)
+            detected[lib_name].usage_snippets = deduped_snippets[:5]
 
-        return list(detected.values())
-
-    def _gather_page_data(self) -> dict[str, Any]:
+    async def _gather_page_data(self, context: Any, context_name: str) -> dict[str, Any]:
         """Gather script and global data from the page.
 
         Returns:
             Dictionary with scripts, globals, and inline_scripts.
         """
         try:
-            return self.page.evaluate("""() => {
+            return await context.evaluate("""() => {
                 const data = {
                     scripts: [],
                     globals: {},
@@ -139,6 +167,9 @@ class LibraryDetector:
                 return data;
             }""")
         except Exception:
+            self.last_limitations.append(
+                f"Could not inspect external libraries in the {context_name} document."
+            )
             return {"scripts": [], "globals": {}, "inline_scripts": []}
 
     def _identify_library_from_url(self, url: str) -> str | None:

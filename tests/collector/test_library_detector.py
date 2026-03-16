@@ -14,6 +14,7 @@ sys.path.insert(0, project_root)
 import pytest
 from playwright.sync_api import Page
 
+from collector.extraction_scope import ExtractionScope
 from collector.library_detector import LibraryDetector
 from models.extraction import ExternalLibrary
 
@@ -96,6 +97,43 @@ class TestLibraryDetectorDetect:
         assert "GSAP" in names
         assert "Three.js" in names
         assert "Lottie" in names
+
+    def test_detect_merges_frame_and_page_signals(self):
+        """detect() should merge library signals from the target frame and main page."""
+        mock_page = MagicMock(spec=Page)
+        mock_frame = MagicMock()
+        mock_page.main_frame = MagicMock()
+        mock_page.evaluate.return_value = {
+            "scripts": [],
+            "globals": {"gsap": True},
+            "inline_scripts": ["gsap.to('.hero', {x: 100});"],
+        }
+        mock_frame.evaluate.return_value = {
+            "scripts": [
+                {"src": "https://unpkg.com/swiper@8.4.5/swiper-bundle.min.js"},
+            ],
+            "globals": {},
+            "inline_scripts": [],
+        }
+        scope = ExtractionScope(
+            page=mock_page,
+            frame=mock_frame,
+            target=MagicMock(),
+            selector_used="#workflow",
+            strategy="css",
+            frame_url="https://example.com/embed",
+            frame_name="frame",
+            same_origin_accessible=True,
+            document_base_url="https://example.com/embed",
+        )
+
+        detector = LibraryDetector(mock_page)
+        result = detector.detect(scope=scope)
+
+        names = [lib.name for lib in result]
+        assert "GSAP" in names
+        assert "Swiper" in names
+        assert detector.last_limitations == []
 
     def test_detect_extracts_version_from_url(self):
         """detect() should extract version numbers from CDN URLs."""

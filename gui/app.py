@@ -69,7 +69,7 @@ class ComponentExtractorApp:
         )
         status_bar.pack(side="bottom", fill="x")
 
-    def _on_extract(self, url: str, strategy: str, query: str):
+    def _on_extract(self, url: str, extraction_mode: str, strategy: str, query: str):
         """Handle extract button click."""
         # Get API key
         api_key = os.getenv("OPENAI_API_KEY")
@@ -91,6 +91,7 @@ class ComponentExtractorApp:
         self.worker = ExtractionWorker(
             orchestrator=self.orchestrator,
             url=url,
+            extraction_mode=extraction_mode,
             strategy=strategy,
             query=query,
             callback_queue=self.callback_queue,
@@ -130,9 +131,36 @@ class ComponentExtractorApp:
 
         elif msg_type == "success":
             _, result = msg
-            self.result_panel.display_result(result)
+            normalized_output = (
+                self.orchestrator.last_normalized_output if self.orchestrator else None
+            )
+
+            self.result_panel.display_result(
+                result,
+                full_json=(
+                    normalized_output.model_dump(mode="json")
+                    if normalized_output is not None
+                    else None
+                ),
+                screenshot_path=(
+                    normalized_output.get_primary_screenshot_path()
+                    if normalized_output is not None
+                    else None
+                ),
+                result_kind=(
+                    "Landing Page"
+                    if normalized_output is not None
+                    and normalized_output.mode.value == "full_page"
+                    else "Component"
+                ),
+            )
             self.result_panel.display_assets(
-                [a.model_dump() for a in result.assets] if hasattr(result, 'assets') else []
+                [
+                    asset.model_dump(mode="json")
+                    for asset in normalized_output.assets
+                ]
+                if normalized_output is not None
+                else []
             )
             self.status_var.set("Complete!")
             self.input_panel.set_extracting_state(False)

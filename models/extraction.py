@@ -15,6 +15,13 @@ class SelectorStrategy(str, Enum):
     HTML_SNIPPET = "html_snippet"
 
 
+class ExtractionMode(str, Enum):
+    """Scope of extraction requested by the user."""
+
+    COMPONENT = "component"
+    FULL_PAGE = "full_page"
+
+
 class InteractionType(str, Enum):
     """Type of user interaction."""
 
@@ -31,6 +38,14 @@ class AssetType(str, Enum):
     SVG = "svg"
     FONT = "font"
     VIDEO = "video"
+
+
+class RichMediaType(str, Enum):
+    """Type of rich media element captured from the page."""
+
+    VIDEO = "video"
+    CANVAS = "canvas"
+    WEBGL = "webgl"
 
 
 class BoundingBox(BaseModel):

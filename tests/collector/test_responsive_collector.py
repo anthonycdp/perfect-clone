@@ -14,6 +14,7 @@ sys.path.insert(0, project_root)
 import pytest
 from playwright.sync_api import Page, Locator
 
+from collector.extraction_scope import ExtractionScope
 from collector.responsive_collector import ResponsiveCollector
 from models.normalized import ResponsiveBehavior
 
@@ -87,6 +88,29 @@ class TestResponsiveCollectorDetectBreakpoints:
 
         # Should fall back to standard breakpoints
         assert result == collector.STANDARD_BREAKPOINTS
+
+    def test_detect_breakpoints_uses_target_frame_when_scope_is_provided(self):
+        """detect_breakpoints() should inspect media queries inside the target frame."""
+        mock_page = MagicMock(spec=Page)
+        mock_frame = MagicMock()
+        mock_frame.evaluate.return_value = [640, 960]
+        scope = ExtractionScope(
+            page=mock_page,
+            frame=mock_frame,
+            target=MagicMock(spec=Locator),
+            selector_used="#target",
+            strategy="css",
+            frame_url="https://example.com/embed",
+            frame_name="embed",
+            same_origin_accessible=True,
+            document_base_url="https://example.com/embed",
+        )
+
+        collector = ResponsiveCollector(mock_page)
+        result = collector.detect_breakpoints(scope=scope)
+
+        assert result == [640, 960]
+        mock_frame.evaluate.assert_called_once()
 
 
 class TestResponsiveCollectorCollectAtViewport:

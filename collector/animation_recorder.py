@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from playwright.sync_api import Locator, Page
+from playwright.async_api import Locator, Page
 
 from models.extraction import AnimationRecording
 
@@ -29,7 +29,7 @@ class AnimationRecorder:
         self.output_dir = output_dir
         self.animations_dir = Path(output_dir) / "animations"
 
-    def record(
+    async def record(
         self, target: Locator, duration_ms: int = 2000
     ) -> Optional[AnimationRecording]:
         """Record target element animation via screenshots.
@@ -56,7 +56,7 @@ class AnimationRecorder:
             frames = []
             for i in range(frame_count):
                 frame_path = frames_dir / f"frame_{i:04d}.png"
-                target.screenshot(path=str(frame_path))
+                await target.screenshot(path=str(frame_path))
                 frames.append(frame_path)
 
                 # Sleep between frames (but not after the last one)

@@ -8,6 +8,7 @@ from models.errors import (
     BrowserCrashError,
 )
 from models.extraction import (
+    ExtractionMode,
     SelectorStrategy,
     InteractionType,
     AssetType,
@@ -21,6 +22,7 @@ from models.extraction import (
     AnimationRecording,
 )
 from models.normalized import (
+    BaseNormalizedOutput,
     PageInfo,
     TargetInfo,
     DOMTree,
@@ -28,7 +30,10 @@ from models.normalized import (
     AnimationSummary,
     InteractionSummary,
     ResponsiveBehavior,
+    PageSectionSummary,
+    PageCaptureInfo,
     NormalizedOutput,
+    FullPageNormalizedOutput,
 )
 from models.synthesis import (
     ComponentDescription,
@@ -47,6 +52,7 @@ __all__ = [
     "APIError",
     "BrowserCrashError",
     # Enums
+    "ExtractionMode",
     "SelectorStrategy",
     "InteractionType",
     "AssetType",
@@ -60,6 +66,7 @@ __all__ = [
     "ResponsiveBreakpoint",
     "AnimationRecording",
     # Normalized Models
+    "BaseNormalizedOutput",
     "PageInfo",
     "TargetInfo",
     "DOMTree",
@@ -67,7 +74,10 @@ __all__ = [
     "AnimationSummary",
     "InteractionSummary",
     "ResponsiveBehavior",
+    "PageSectionSummary",
+    "PageCaptureInfo",
     "NormalizedOutput",
+    "FullPageNormalizedOutput",
     # Synthesis Models
     "ComponentDescription",
     "ComponentTree",

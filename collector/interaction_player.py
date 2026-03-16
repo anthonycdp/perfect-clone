@@ -3,7 +3,9 @@
 import time
 from typing import Any
 
-from playwright.sync_api import Locator, Page
+from playwright.async_api import Locator, Page
+
+from collector.extraction_scope import ExtractionScope
 
 
 class InteractionPlayer:
@@ -17,8 +19,11 @@ class InteractionPlayer:
         """
         self.page = page
 
-    def play_all(
-        self, target: Locator, interactions: list[dict[str, Any]]
+    async def play_all(
+        self,
+        target: Locator,
+        interactions: list[dict[str, Any]],
+        scope: ExtractionScope | None = None,
     ) -> list[dict[str, Any]]:
         """Execute all interactions and capture before/after states.
 
@@ -45,14 +50,23 @@ class InteractionPlayer:
             if not interaction_type or not selector:
                 continue
 
-            result = self._execute_interaction(target, interaction_type, selector)
+            result = await self._execute_interaction(
+                target,
+                interaction_type,
+                selector,
+                scope=scope,
+            )
             if result:
                 results.append(result)
 
         return results
 
-    def _execute_interaction(
-        self, target: Locator, interaction_type: str, selector: str
+    async def _execute_interaction(
+        self,
+        target: Locator,
+        interaction_type: str,
+        selector: str,
+        scope: ExtractionScope | None = None,
     ) -> dict[str, Any] | None:
         """Execute a single interaction and capture states.
 
@@ -65,30 +79,34 @@ class InteractionPlayer:
             Dictionary with before/after states and duration, or None on failure.
         """
         try:
-            # Find the element within the target
-            element = target.locator(selector)
-            if element.count() == 0:
-                # Try finding in the whole page
-                element = self.page.locator(selector)
-                if element.count() == 0:
-                    return None
-
-            element = element.first
+            element = await self._find_interaction_element(target, selector, scope=scope)
+            if element is None:
+                return None
 
             # Capture before state
-            before_state = self._capture_state(element)
+            before_state = await self._capture_state(element)
 
             # Execute the interaction
             start_time = time.time()
 
             if interaction_type == "hover":
-                element.hover(force=True)
+                await element.hover(force=True)
             elif interaction_type == "click":
-                element.click(force=True)
+                await element.evaluate("""el => {
+                    const cancelDefault = event => event.preventDefault();
+                    el.addEventListener('click', cancelDefault, { capture: true, once: true });
+                    el.dispatchEvent(
+                        new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window,
+                        })
+                    );
+                }""")
             elif interaction_type == "focus":
-                element.focus()
+                await element.focus()
             elif interaction_type == "scroll":
-                element.evaluate("el => el.scrollTop = el.scrollHeight")
+                await element.evaluate("el => el.scrollTop = el.scrollHeight")
             else:
                 return None
 
@@ -99,7 +117,7 @@ class InteractionPlayer:
             time.sleep(0.05)
 
             # Capture after state
-            after_state = self._capture_state(element)
+            after_state = await self._capture_state(element)
 
             return {
                 "type": interaction_type,
@@ -111,7 +129,29 @@ class InteractionPlayer:
         except Exception:
             return None
 
-    def _capture_state(self, element: Locator) -> dict[str, Any]:
+    async def _find_interaction_element(
+        self,
+        target: Locator,
+        selector: str,
+        scope: ExtractionScope | None = None,
+    ) -> Locator | None:
+        """Resolve an interaction selector within the correct document scope."""
+        element = target.locator(selector)
+        if await element.count() > 0:
+            return element.first
+
+        if scope is not None:
+            frame_element = scope.frame.locator(selector)
+            if await frame_element.count() > 0:
+                return frame_element.first
+            return None
+
+        page_element = self.page.locator(selector)
+        if await page_element.count() > 0:
+            return page_element.first
+        return None
+
+    async def _capture_state(self, element: Locator) -> dict[str, Any]:
         """Capture the current state of an element.
 
         Args:
@@ -121,7 +161,7 @@ class InteractionPlayer:
             Dictionary containing element state information.
         """
         try:
-            state = element.evaluate("""el => {
+            state = await element.evaluate("""el => {
                 const style = window.getComputedStyle(el);
                 const rect = el.getBoundingClientRect();
 
